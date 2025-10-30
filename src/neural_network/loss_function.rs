@@ -41,3 +41,99 @@ impl NeuralNetwork {
         -loss.mean().unwrap()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ndarray::arr1;
+
+    #[test]
+    fn given_perfect_prediction_when_loss_function_then_returns_near_zero() {
+        let nn = NeuralNetwork::new(2, 3, 2);
+        let y_true = arr1(&[1.0, 0.0]);
+        let y_pred = arr1(&[0.9999, 0.0001]);
+
+        let loss = nn.loss_function(&y_true, &y_pred);
+        assert!(
+            loss < 0.01,
+            "Loss should be very small for accurate predictions"
+        );
+    }
+
+    #[test]
+    fn given_wrong_prediction_when_loss_function_then_returns_high_loss() {
+        let nn = NeuralNetwork::new(2, 3, 2);
+        let y_true = arr1(&[1.0, 0.0]);
+        let y_pred = arr1(&[0.1, 0.9]);
+
+        let loss = nn.loss_function(&y_true, &y_pred);
+        assert!(loss > 1.0, "Loss should be high for wrong predictions");
+    }
+
+    #[test]
+    fn given_medium_prediction_when_loss_function_then_returns_medium_loss() {
+        let nn = NeuralNetwork::new(2, 3, 2);
+        let y_true = arr1(&[1.0, 0.0]);
+        let y_pred = arr1(&[0.5, 0.5]);
+
+        let loss = nn.loss_function(&y_true, &y_pred);
+        assert!(
+            loss > 0.5 && loss < 1.5,
+            "Loss should be moderate for uncertain predictions"
+        );
+    }
+
+    #[test]
+    fn given_all_zeros_true_when_loss_function_then_handles_correctly() {
+        let nn = NeuralNetwork::new(2, 3, 3);
+        let y_true = arr1(&[0.0, 0.0, 1.0]);
+        let y_pred = arr1(&[0.1, 0.1, 0.8]);
+
+        let loss = nn.loss_function(&y_true, &y_pred);
+        assert!(loss.is_finite(), "Loss should be finite");
+        assert!(loss >= 0.0, "Loss should be non-negative");
+    }
+
+    #[test]
+    fn given_extreme_predictions_when_loss_function_then_clips_correctly() {
+        let nn = NeuralNetwork::new(2, 3, 2);
+        let y_true = arr1(&[1.0, 0.0]);
+        // Extreme values that would cause log(0) without clipping
+        let y_pred = arr1(&[1.0, 0.0]);
+
+        let loss = nn.loss_function(&y_true, &y_pred);
+        assert!(loss.is_finite(), "Loss should handle extreme values");
+        assert!(loss < 0.1, "Perfect prediction should have very low loss");
+    }
+
+    #[test]
+    fn given_multiple_outputs_when_loss_function_then_averages_correctly() {
+        let nn = NeuralNetwork::new(2, 3, 5);
+        let y_true = arr1(&[1.0, 0.0, 1.0, 0.0, 1.0]);
+        let y_pred = arr1(&[0.9, 0.1, 0.9, 0.1, 0.9]);
+
+        let loss = nn.loss_function(&y_true, &y_pred);
+        assert!(loss.is_finite(), "Loss should be finite");
+        assert!(
+            loss < 0.2,
+            "Good predictions across multiple outputs should have low loss"
+        );
+    }
+
+    #[test]
+    fn given_better_prediction_when_loss_function_then_lower_loss() {
+        let nn = NeuralNetwork::new(2, 3, 2);
+        let y_true = arr1(&[1.0, 0.0]);
+
+        let y_pred_good = arr1(&[0.9, 0.1]);
+        let y_pred_bad = arr1(&[0.6, 0.4]);
+
+        let loss_good = nn.loss_function(&y_true, &y_pred_good);
+        let loss_bad = nn.loss_function(&y_true, &y_pred_bad);
+
+        assert!(
+            loss_good < loss_bad,
+            "Better predictions should have lower loss"
+        );
+    }
+}

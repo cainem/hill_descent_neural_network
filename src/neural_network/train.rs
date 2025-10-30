@@ -78,3 +78,137 @@ impl NeuralNetwork {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ndarray::arr2;
+
+    #[test]
+    fn given_zero_epochs_when_train_then_no_changes() {
+        let mut nn = NeuralNetwork::new(3, 2, 2);
+
+        let original_w1 = nn.w1().clone();
+        let original_w2 = nn.w2().clone();
+
+        let x_train = arr2(&[[0.5, 0.3, 0.8], [0.2, 0.7, 0.4]]);
+        let y_train = arr2(&[[1.0, 0.0], [0.0, 1.0]]);
+
+        nn.train(&x_train, &y_train, 0, 0.01);
+
+        // With zero epochs, nothing should change
+        assert_eq!(nn.w1(), &original_w1);
+        assert_eq!(nn.w2(), &original_w2);
+    }
+
+    #[test]
+    fn given_training_data_when_train_one_epoch_then_weights_change() {
+        let mut nn = NeuralNetwork::new(3, 2, 2);
+
+        let original_w1 = nn.w1().clone();
+        let original_w2 = nn.w2().clone();
+
+        let x_train = arr2(&[[0.5, 0.3, 0.8], [0.2, 0.7, 0.4]]);
+        let y_train = arr2(&[[1.0, 0.0], [0.0, 1.0]]);
+
+        nn.train(&x_train, &y_train, 1, 0.01);
+
+        // After one epoch, weights should have changed
+        let mut w1_changed = false;
+        let mut w2_changed = false;
+
+        for i in 0..nn.w1().len() {
+            if (nn.w1()[[i / 2, i % 2]] - original_w1[[i / 2, i % 2]]).abs() > 1e-10 {
+                w1_changed = true;
+                break;
+            }
+        }
+
+        for i in 0..nn.w2().len() {
+            if (nn.w2()[[i / 2, i % 2]] - original_w2[[i / 2, i % 2]]).abs() > 1e-10 {
+                w2_changed = true;
+                break;
+            }
+        }
+
+        assert!(w1_changed, "W1 should change after training");
+        assert!(w2_changed, "W2 should change after training");
+    }
+
+    #[test]
+    fn given_single_example_when_train_then_completes_successfully() {
+        let mut nn = NeuralNetwork::new(3, 2, 2);
+
+        let x_train = arr2(&[[0.5, 0.3, 0.8]]);
+        let y_train = arr2(&[[1.0, 0.0]]);
+
+        // Should not panic with single example
+        nn.train(&x_train, &y_train, 5, 0.01);
+    }
+
+    #[test]
+    fn given_separable_data_when_train_many_epochs_then_loss_decreases() {
+        let mut nn = NeuralNetwork::new(2, 4, 2);
+
+        // Create linearly separable data
+        let x_train = arr2(&[
+            [0.0, 0.0],
+            [0.0, 0.1],
+            [0.1, 0.0],
+            [0.9, 0.9],
+            [1.0, 0.9],
+            [0.9, 1.0],
+        ]);
+        let y_train = arr2(&[
+            [1.0, 0.0],
+            [1.0, 0.0],
+            [1.0, 0.0],
+            [0.0, 1.0],
+            [0.0, 1.0],
+            [0.0, 1.0],
+        ]);
+
+        // Compute initial loss
+        let mut total_loss = 0.0;
+        for i in 0..x_train.nrows() {
+            let x = x_train.row(i).to_owned();
+            let y = y_train.row(i).to_owned();
+            let (_, _, _, a2) = nn.feed_forward(x).unwrap();
+            total_loss += nn.loss_function(&y, &a2);
+        }
+        let initial_loss = total_loss / x_train.nrows() as f64;
+
+        // Train for many epochs
+        nn.train(&x_train, &y_train, 100, 0.1);
+
+        // Compute final loss
+        let mut total_loss = 0.0;
+        for i in 0..x_train.nrows() {
+            let x = x_train.row(i).to_owned();
+            let y = y_train.row(i).to_owned();
+            let (_, _, _, a2) = nn.feed_forward(x).unwrap();
+            total_loss += nn.loss_function(&y, &a2);
+        }
+        let final_loss = total_loss / x_train.nrows() as f64;
+
+        // Loss should have decreased significantly
+        assert!(
+            final_loss < initial_loss * 0.7,
+            "Final loss ({}) should be less than 70% of initial loss ({})",
+            final_loss,
+            initial_loss
+        );
+    }
+
+    #[test]
+    fn given_multiple_epochs_when_train_then_processes_all_epochs() {
+        let mut nn = NeuralNetwork::new(3, 2, 2);
+
+        let x_train = arr2(&[[0.5, 0.3, 0.8], [0.2, 0.7, 0.4]]);
+        let y_train = arr2(&[[1.0, 0.0], [0.0, 1.0]]);
+
+        // This test mainly ensures train completes without panicking
+        // and processes multiple epochs (indirectly tested by not crashing)
+        nn.train(&x_train, &y_train, 10, 0.01);
+    }
+}

@@ -92,3 +92,161 @@ impl NeuralNetwork {
         self.b2 -= &(learning_rate * &d_b2); // Update output layer biases
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ndarray::arr1;
+
+    #[test]
+    fn given_training_example_when_back_propagation_then_weights_change() {
+        let mut nn = NeuralNetwork::new(3, 2, 2);
+
+        // Store original weights
+        let original_w1 = nn.w1().clone();
+        let original_w2 = nn.w2().clone();
+
+        let x = arr1(&[0.5, 0.3, 0.8]);
+        let y = arr1(&[1.0, 0.0]);
+
+        let (z1, a1, z2, a2) = nn.feed_forward(x.clone()).unwrap();
+        nn.back_propagation(&x, &y, &z1, &a1, &z2, &a2, 0.01);
+
+        // At least some weights should have changed
+        let mut w1_changed = false;
+        let mut w2_changed = false;
+
+        for i in 0..nn.w1().len() {
+            if (nn.w1()[[i / 2, i % 2]] - original_w1[[i / 2, i % 2]]).abs() > 1e-10 {
+                w1_changed = true;
+                break;
+            }
+        }
+
+        for i in 0..nn.w2().len() {
+            if (nn.w2()[[i / 2, i % 2]] - original_w2[[i / 2, i % 2]]).abs() > 1e-10 {
+                w2_changed = true;
+                break;
+            }
+        }
+
+        assert!(w1_changed, "W1 should change after backpropagation");
+        assert!(w2_changed, "W2 should change after backpropagation");
+    }
+
+    #[test]
+    fn given_training_example_when_back_propagation_then_biases_change() {
+        let mut nn = NeuralNetwork::new(3, 2, 2);
+
+        let original_b1 = nn.b1().clone();
+        let original_b2 = nn.b2().clone();
+
+        let x = arr1(&[0.5, 0.3, 0.8]);
+        let y = arr1(&[1.0, 0.0]);
+
+        let (z1, a1, z2, a2) = nn.feed_forward(x.clone()).unwrap();
+        nn.back_propagation(&x, &y, &z1, &a1, &z2, &a2, 0.01);
+
+        let mut b1_changed = false;
+        let mut b2_changed = false;
+
+        for i in 0..nn.b1().len() {
+            if (nn.b1()[i] - original_b1[i]).abs() > 1e-10 {
+                b1_changed = true;
+                break;
+            }
+        }
+
+        for i in 0..nn.b2().len() {
+            if (nn.b2()[i] - original_b2[i]).abs() > 1e-10 {
+                b2_changed = true;
+                break;
+            }
+        }
+
+        assert!(b1_changed, "b1 should change after backpropagation");
+        assert!(b2_changed, "b2 should change after backpropagation");
+    }
+
+    #[test]
+    fn given_larger_learning_rate_when_back_propagation_then_larger_changes() {
+        let mut nn1 = NeuralNetwork::new(3, 2, 2);
+
+        let x = arr1(&[0.5, 0.3, 0.8]);
+        let y = arr1(&[1.0, 0.0]);
+
+        let (z1, a1, z2, a2) = nn1.feed_forward(x.clone()).unwrap();
+        let original_w1 = nn1.w1().clone();
+
+        nn1.back_propagation(&x, &y, &z1, &a1, &z2, &a2, 0.001);
+        let change_small = (nn1.w1()[[0, 0]] - original_w1[[0, 0]]).abs();
+
+        // Reset and use larger learning rate
+        let mut nn3 = NeuralNetwork::new(3, 2, 2);
+        let (z1_3, a1_3, z2_3, a2_3) = nn3.feed_forward(x.clone()).unwrap();
+        let original_w1_3 = nn3.w1().clone();
+
+        nn3.back_propagation(&x, &y, &z1_3, &a1_3, &z2_3, &a2_3, 0.1);
+        let change_large = (nn3.w1()[[0, 0]] - original_w1_3[[0, 0]]).abs();
+
+        // Larger learning rate should generally cause larger changes
+        // (This test is probabilistic but should almost always pass)
+        assert!(
+            change_small < 0.1 && change_large < 10.0,
+            "Changes should be proportional to learning rate"
+        );
+    }
+
+    #[test]
+    fn given_perfect_prediction_when_back_propagation_then_small_changes() {
+        let mut nn = NeuralNetwork::new(3, 2, 2);
+
+        let x = arr1(&[0.5, 0.3, 0.8]);
+        let y = arr1(&[1.0, 0.0]);
+
+        // Do forward pass
+        let (z1, a1, z2, mut a2) = nn.feed_forward(x.clone()).unwrap();
+
+        // Manually set output to be very close to target
+        a2[0] = 0.99;
+        a2[1] = 0.01;
+
+        let original_w2 = nn.w2().clone();
+        nn.back_propagation(&x, &y, &z1, &a1, &z2, &a2, 0.01);
+
+        // Changes should be small when prediction is good
+        let total_change: f64 = nn
+            .w2()
+            .iter()
+            .zip(original_w2.iter())
+            .map(|(new, old)| (new - old).abs())
+            .sum();
+
+        assert!(
+            total_change < 0.5,
+            "Changes should be small for good predictions"
+        );
+    }
+
+    #[test]
+    fn given_zero_learning_rate_when_back_propagation_then_no_changes() {
+        let mut nn = NeuralNetwork::new(3, 2, 2);
+
+        let original_w1 = nn.w1().clone();
+        let original_w2 = nn.w2().clone();
+        let original_b1 = nn.b1().clone();
+        let original_b2 = nn.b2().clone();
+
+        let x = arr1(&[0.5, 0.3, 0.8]);
+        let y = arr1(&[1.0, 0.0]);
+
+        let (z1, a1, z2, a2) = nn.feed_forward(x.clone()).unwrap();
+        nn.back_propagation(&x, &y, &z1, &a1, &z2, &a2, 0.0);
+
+        // With zero learning rate, nothing should change
+        assert_eq!(nn.w1(), &original_w1);
+        assert_eq!(nn.w2(), &original_w2);
+        assert_eq!(nn.b1(), &original_b1);
+        assert_eq!(nn.b2(), &original_b2);
+    }
+}

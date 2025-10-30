@@ -38,3 +38,95 @@ impl NeuralNetwork {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn given_valid_dimensions_when_new_then_creates_network() {
+        let nn = NeuralNetwork::new(784, 64, 10);
+
+        assert_eq!(nn.input_size(), 784);
+        assert_eq!(nn.hidden_size(), 64);
+        assert_eq!(nn.output_size(), 10);
+    }
+
+    #[test]
+    fn given_new_network_when_checking_weights_then_correct_shapes() {
+        let nn = NeuralNetwork::new(784, 64, 10);
+
+        // W1 should be (input_size × hidden_size)
+        assert_eq!(nn.w1().shape(), &[784, 64]);
+
+        // W2 should be (hidden_size × output_size)
+        assert_eq!(nn.w2().shape(), &[64, 10]);
+
+        // b1 should be (hidden_size)
+        assert_eq!(nn.b1().len(), 64);
+
+        // b2 should be (output_size)
+        assert_eq!(nn.b2().len(), 10);
+    }
+
+    #[test]
+    fn given_new_network_when_checking_weights_then_values_in_range() {
+        let nn = NeuralNetwork::new(10, 5, 2);
+
+        // All weights should be between -1.0 and 1.0
+        for &val in nn.w1().iter() {
+            assert!((-1.0..=1.0).contains(&val));
+        }
+
+        for &val in nn.w2().iter() {
+            assert!((-1.0..=1.0).contains(&val));
+        }
+
+        for &val in nn.b1().iter() {
+            assert!((-1.0..=1.0).contains(&val));
+        }
+
+        for &val in nn.b2().iter() {
+            assert!((-1.0..=1.0).contains(&val));
+        }
+    }
+
+    #[test]
+    fn given_two_networks_when_created_then_different_weights() {
+        let nn1 = NeuralNetwork::new(10, 5, 2);
+        let nn2 = NeuralNetwork::new(10, 5, 2);
+
+        // Random initialization should give different values
+        // Check if at least some weights are different
+        let mut has_difference = false;
+        for i in 0..nn1.w1().len() {
+            if (nn1.w1()[[i / 5, i % 5]] - nn2.w1()[[i / 5, i % 5]]).abs() > 1e-10 {
+                has_difference = true;
+                break;
+            }
+        }
+
+        assert!(
+            has_difference,
+            "Two networks should have different random weights"
+        );
+    }
+
+    #[test]
+    fn given_small_dimensions_when_new_then_creates_network() {
+        let nn = NeuralNetwork::new(2, 3, 1);
+
+        assert_eq!(nn.input_size(), 2);
+        assert_eq!(nn.hidden_size(), 3);
+        assert_eq!(nn.output_size(), 1);
+    }
+
+    #[test]
+    fn given_large_dimensions_when_new_then_creates_network() {
+        let nn = NeuralNetwork::new(1000, 500, 100);
+
+        assert_eq!(nn.input_size(), 1000);
+        assert_eq!(nn.hidden_size(), 500);
+        assert_eq!(nn.output_size(), 100);
+    }
+}
