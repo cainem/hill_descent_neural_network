@@ -5,11 +5,14 @@ use serde_derive::{Deserialize, Serialize};
 mod accuracy;
 mod back_propagation;
 mod feed_forward;
+mod genetic_fitness;
 mod load;
 mod loss_function;
 mod new;
+mod parameter_flattening;
 mod save;
 mod train;
+mod train_genetic;
 
 /// A simple 3-layer feedforward neural network for classification.
 ///
