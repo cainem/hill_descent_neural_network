@@ -41,23 +41,14 @@ pub struct GeneticFitness {
 impl GeneticFitness {
     /// Creates a new fitness function for genetic algorithm training.
     ///
+    /// Internal use only - called by `NeuralNetwork::train_genetic()`.
+    ///
     /// # Arguments
     /// * `architecture` - Network dimensions (input_size, hidden_size, output_size)
     /// * `x_train` - Training images as 2D array (rows=examples, cols=784 pixels)
     /// * `y_train` - Training labels as 2D array (rows=examples, cols=10 one-hot)
     /// * `subset_size` - Number of random examples to evaluate per fitness call
     /// * `regenerate_frequency` - How many evaluations before picking new random subset
-    ///
-    /// # Example
-    /// ```
-    /// let fitness = GeneticFitness::new(
-    ///     (784, 64, 10),
-    ///     Arc::new(x_train),
-    ///     Arc::new(y_train),
-    ///     1000,  // Evaluate on 1000 random examples
-    ///     100,   // Pick new examples every 100 evaluations
-    /// );
-    /// ```
     pub fn new(
         architecture: (usize, usize, usize),
         x_train: Arc<Array2<f64>>,

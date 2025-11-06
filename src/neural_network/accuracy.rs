@@ -25,6 +25,13 @@ impl NeuralNetwork {
     ///
     /// # Example
     /// ```
+    /// use neural_network_scratch::NeuralNetwork;
+    /// use ndarray::Array2;
+    ///
+    /// let nn = NeuralNetwork::new(784, 64, 10);
+    /// let x_test = Array2::from_shape_fn((100, 784), |(_, _)| 0.5);
+    /// let y_test = Array2::from_shape_fn((100, 10), |(i, j)| if j == i % 10 { 1.0 } else { 0.0 });
+    ///
     /// let acc = nn.accuracy(&x_test, &y_test);
     /// println!("Test accuracy: {:.2}%", acc);  // e.g., "Test accuracy: 96.82%"
     /// ```

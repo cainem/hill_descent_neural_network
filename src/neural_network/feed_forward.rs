@@ -29,8 +29,14 @@ impl NeuralNetwork {
     ///
     /// # Example
     /// ```
+    /// use neural_network_scratch::NeuralNetwork;
+    /// use ndarray::Array1;
+    ///
+    /// let nn = NeuralNetwork::new(784, 64, 10);
+    /// let input_vector = Array1::zeros(784);
     /// let (z1, a1, z2, a2) = nn.feed_forward(input_vector)?;
     /// // a2 contains the network's predictions
+    /// # Ok::<(), String>(())
     /// ```
     pub fn feed_forward(&self, x: Array1<f64>) -> FeedForwardResult {
         // Validate input dimensions match what the network expects

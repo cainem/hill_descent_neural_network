@@ -22,8 +22,13 @@ impl NeuralNetwork {
     /// - File I/O errors (disk full, permission denied, invalid path, etc.)
     ///
     /// # Example
-    /// ```
+    /// ```no_run
+    /// use neural_network_scratch::NeuralNetwork;
+    /// use std::path::PathBuf;
+    ///
+    /// let nn = NeuralNetwork::new(784, 64, 10);
     /// nn.save(&PathBuf::from("model.bin"))?;
+    /// # Ok::<(), std::io::Error>(())
     /// ```
     pub fn save(&self, path: &PathBuf) -> io::Result<()> {
         // Serialize the entire NeuralNetwork struct to binary format

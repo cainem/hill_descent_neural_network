@@ -23,8 +23,12 @@ impl NeuralNetwork {
     /// - Dimension validation errors (not 784 inputs or 10 outputs)
     ///
     /// # Example
-    /// ```
+    /// ```no_run
+    /// use neural_network_scratch::NeuralNetwork;
+    /// use std::path::PathBuf;
+    ///
     /// let nn = NeuralNetwork::load(&PathBuf::from("model.bin"))?;
+    /// # Ok::<(), std::io::Error>(())
     /// ```
     pub fn load(path: &PathBuf) -> io::Result<NeuralNetwork> {
         // Open and read the entire file into memory

@@ -24,7 +24,14 @@ impl NeuralNetwork {
     /// * `learning_rate` - Step size for weight updates (typically 0.01)
     ///
     /// # Example
-    /// ```
+    /// ```no_run
+    /// use neural_network_scratch::NeuralNetwork;
+    /// use ndarray::Array2;
+    ///
+    /// let mut nn = NeuralNetwork::new(784, 64, 10);
+    /// let x_train = Array2::from_shape_fn((1000, 784), |(_, _)| 0.5);
+    /// let y_train = Array2::from_shape_fn((1000, 10), |(i, j)| if j == i % 10 { 1.0 } else { 0.0 });
+    ///
     /// nn.train(&x_train, &y_train, 10, 0.01);  // Train for 10 epochs
     /// ```
     ///

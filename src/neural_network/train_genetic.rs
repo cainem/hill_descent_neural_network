@@ -1,6 +1,6 @@
 use super::genetic_fitness::GeneticFitness;
 use super::NeuralNetwork;
-use hill_descent_lib::{setup_world, GlobalConstants};
+use hill_descent_lib::{setup_world, GlobalConstants, TrainingData};
 use ndarray::Array2;
 use std::ops::RangeInclusive;
 use std::sync::Arc;
@@ -31,7 +31,14 @@ impl NeuralNetwork {
     /// Tuple of (final_loss, training_time_seconds)
     ///
     /// # Example
-    /// ```
+    /// ```no_run
+    /// use neural_network_scratch::NeuralNetwork;
+    /// use ndarray::Array2;
+    ///
+    /// let mut nn = NeuralNetwork::new(784, 64, 10);
+    /// let x_train = Array2::from_shape_fn((1000, 784), |(_, _)| 0.5);
+    /// let y_train = Array2::from_shape_fn((1000, 10), |(i, j)| if j == i % 10 { 1.0 } else { 0.0 });
+    ///
     /// let (final_loss, training_time) = nn.train_genetic(
     ///     &x_train,
     ///     &y_train,
@@ -97,7 +104,7 @@ impl NeuralNetwork {
         for generation in 1..=generations {
             // Perform one generation of evolution
             // The library handles: fitness evaluation, selection, reproduction, mutation
-            world.training_run(&[], &[0.0]);
+            world.training_run(TrainingData::None { floor_value: 0.0 });
 
             let best_score = world.get_best_score();
 
@@ -112,10 +119,7 @@ impl NeuralNetwork {
         }
 
         // Extract best organism's parameters and update the network
-        // get_best_organism runs one more training epoch, needs proper parameters
-        let dummy_input = [0.0];
-        let floor_value = [0.0];
-        let best_organism = world.get_best_organism(&[&dummy_input], &[&floor_value]);
+        let best_organism = world.get_best_organism(TrainingData::None { floor_value: 0.0 });
         let best_params = best_organism.phenotype().expression_problem_values();
         self.unflatten_parameters(best_params);
 

@@ -20,6 +20,8 @@ impl NeuralNetwork {
     ///
     /// # Example
     /// ```
+    /// use neural_network_scratch::NeuralNetwork;
+    ///
     /// let nn = NeuralNetwork::new(784, 64, 10);
     /// ```
     pub fn new(input_size: usize, hidden_size: usize, output_size: usize) -> Self {

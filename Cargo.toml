@@ -10,4 +10,4 @@ ndarray-rand = "0.15.0"
 serde = { version = "1.0.130", features = ["derive"] }
 serde_derive = "1.0.130"
 bincode = "1.3.3"
-hill_descent_lib = "0.1.0"
+hill_descent_lib = { git = "https://github.com/cainem/hill_descent", branch = "improvements" }
