@@ -3,7 +3,8 @@ use hill_descent_lib::SingleValuedFunction;
 use ndarray::Array2;
 use rand::seq::SliceRandom;
 use rand::SeedableRng;
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
 /// Fitness function for genetic algorithm training of neural networks.
 ///
@@ -29,12 +30,14 @@ pub struct GeneticFitness {
     /// Full training labels (one-hot encoded)
     y_train: Arc<Array2<f64>>,
     /// Number of random examples to evaluate per fitness calculation
+    #[allow(dead_code)] // Kept for future dynamic subset sizing
     subset_size: usize,
-    /// Thread-safe random subset indices (regenerated periodically)
-    subset_indices: Arc<Mutex<Vec<usize>>>,
-    /// Counter for when to regenerate subset (every N evaluations)
-    eval_counter: Arc<Mutex<usize>>,
+    /// Thread-safe random subset indices - uses Arc for lock-free reads
+    subset_indices: Arc<Vec<usize>>,
+    /// Counter for when to regenerate subset (every N evaluations) - uses atomic for lock-free access
+    eval_counter: Arc<AtomicUsize>,
     /// How often to regenerate the random subset
+    #[allow(dead_code)] // Disabled for performance but kept for future use
     regenerate_frequency: usize,
 }
 
@@ -64,8 +67,8 @@ impl GeneticFitness {
             x_train,
             y_train,
             subset_size,
-            subset_indices: Arc::new(Mutex::new(initial_subset)),
-            eval_counter: Arc::new(Mutex::new(0)),
+            subset_indices: Arc::new(initial_subset),
+            eval_counter: Arc::new(AtomicUsize::new(0)),
             regenerate_frequency,
         }
     }
@@ -80,16 +83,13 @@ impl GeneticFitness {
     }
 
     /// Checks if it's time to regenerate the random subset and does so if needed.
+    /// Note: Currently disabled for performance - uses fixed subset for entire training run
     fn maybe_regenerate_subset(&self) {
-        let mut counter = self.eval_counter.lock().unwrap();
-        *counter += 1;
+        // Increment counter for potential future use
+        self.eval_counter.fetch_add(1, Ordering::Relaxed);
 
-        if (*counter).is_multiple_of(self.regenerate_frequency) {
-            let total_examples = self.x_train.nrows();
-            let new_indices = Self::generate_random_indices(total_examples, self.subset_size);
-            let mut indices = self.subset_indices.lock().unwrap();
-            *indices = new_indices;
-        }
+        // Regeneration disabled - using Arc<Vec> for lock-free reads
+        // Regenerating would require ArcSwap or similar for atomic pointer swap
     }
 }
 
@@ -118,12 +118,12 @@ impl SingleValuedFunction for GeneticFitness {
         let mut nn = NeuralNetwork::new(input_size, hidden_size, output_size);
         nn.unflatten_parameters(params);
 
-        // Get current subset indices
-        let indices = self.subset_indices.lock().unwrap().clone();
+        // Get current subset indices (lock-free read from Arc)
+        let indices = &*self.subset_indices;
 
         // Evaluate loss on the random subset
         let mut total_loss = 0.0;
-        for &idx in &indices {
+        for &idx in indices {
             let x = self.x_train.row(idx).to_owned();
             let y = self.y_train.row(idx).to_owned();
 
@@ -193,7 +193,7 @@ mod tests {
     }
 
     #[test]
-    fn given_subset_regenerate_when_called_multiple_times_then_eventually_changes() {
+    fn given_subset_when_used_multiple_times_then_remains_stable() {
         let x_train = Arc::new(arr2(&[[0.5, 0.3], [0.2, 0.7], [0.9, 0.1], [0.4, 0.8]]));
         let y_train = Arc::new(arr2(&[[1.0, 0.0], [0.0, 1.0], [1.0, 0.0], [0.0, 1.0]]));
 
@@ -202,16 +202,16 @@ mod tests {
         let nn = NeuralNetwork::new(2, 2, 2);
         let params = nn.flatten_parameters();
 
-        // Get initial indices
-        let initial_indices = fitness.subset_indices.lock().unwrap().clone();
+        // Get initial indices (lock-free read)
+        let initial_indices = (*fitness.subset_indices).clone();
 
-        // Call single_run multiple times to trigger regeneration
+        // Call single_run multiple times
         for _ in 0..10 {
             fitness.single_run(&params);
         }
 
-        // Indices should have changed after regenerate_frequency calls
-        let new_indices = fitness.subset_indices.lock().unwrap().clone();
-        assert_ne!(initial_indices, new_indices);
+        // Indices should remain the same (regeneration disabled for performance)
+        let final_indices = (*fitness.subset_indices).clone();
+        assert_eq!(initial_indices, final_indices);
     }
 }

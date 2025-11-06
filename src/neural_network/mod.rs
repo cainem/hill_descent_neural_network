@@ -5,7 +5,7 @@ use serde_derive::{Deserialize, Serialize};
 mod accuracy;
 mod back_propagation;
 mod feed_forward;
-mod genetic_fitness;
+pub mod genetic_fitness; // Make public for profiling examples
 mod load;
 mod loss_function;
 mod new;

@@ -92,7 +92,7 @@ impl NeuralNetwork {
         // Configure genetic algorithm
         let constants = GlobalConstants::new(
             population_size,
-            10, // Number of spatial regions for the algorithm
+            10, // Number of spatial regions for the algorithm (optimal balance found empirically)
         );
 
         // Initialize the world with random organisms
