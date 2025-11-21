@@ -1,0 +1,41 @@
+# Dockerfile for Rust profiling with cargo-flamegraph
+FROM ubuntu:22.04
+
+# Avoid timezone prompts
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install dependencies including perf-tools
+RUN apt-get update && apt-get install -y \
+    curl \
+    build-essential \
+    git \
+    linux-tools-generic \
+    linux-tools-common \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Rust
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# Install inferno (flamegraph generator that preserves symbols better)
+RUN cargo install inferno
+
+# Install addr2line and other symbol tools
+RUN cargo install addr2line
+
+# Fix perf for WSL2 kernel - symlink generic tools to WSL2 kernel version
+RUN mkdir -p /usr/lib/linux-tools/6.6.87.2-microsoft-standard-WSL2 && \
+    ln -sf /usr/lib/linux-tools/5.15.0-161-generic/* /usr/lib/linux-tools/6.6.87.2-microsoft-standard-WSL2/
+
+# Set working directory
+WORKDIR /workspace
+
+# The project will be mounted as a volume
+# Usage:
+#   docker build -f Dockerfile.profiling -t neural-net-profiler .
+#   docker run --privileged -v ${PWD}:/workspace -v D:\temp\neural_net_profiling:/output -it neural-net-profiler
+#
+# Then inside container:
+#   ./profile_in_docker.sh
+
+CMD ["/bin/bash"]
