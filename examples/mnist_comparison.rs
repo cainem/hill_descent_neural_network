@@ -10,92 +10,23 @@
 // IMPORTANT: Use --release mode! Debug mode is ~10x slower.
 
 use neural_network_scratch::NeuralNetwork;
-use std::fs::File;
-use std::io::{BufReader, Read};
-use std::path::PathBuf;
 use std::time::Instant;
-
-/// Loads MNIST dataset from IDX file format
-fn load_mnist_data() -> Result<
-    (
-        ndarray::Array2<f64>,
-        ndarray::Array2<f64>,
-        ndarray::Array2<f64>,
-        ndarray::Array2<f64>,
-    ),
-    Box<dyn std::error::Error>,
-> {
-    // Load training images
-    let train_images_path = PathBuf::from("dataset/train-images.idx3-ubyte");
-    let mut file = BufReader::new(File::open(&train_images_path)?);
-    let mut buffer = [0u8; 4];
-
-    // Read magic number and dimensions
-    file.read_exact(&mut buffer)?;
-    file.read_exact(&mut buffer)?;
-    let n_images = u32::from_be_bytes(buffer);
-    file.read_exact(&mut buffer)?;
-    file.read_exact(&mut buffer)?;
-
-    // Read image data and normalize
-    let mut image_data = vec![0u8; (n_images * 28 * 28) as usize];
-    file.read_exact(&mut image_data)?;
-    let x_train: Vec<f64> = image_data.iter().map(|&x| x as f64 / 255.0).collect();
-    let x_train = ndarray::Array2::from_shape_vec((n_images as usize, 784), x_train)?;
-
-    // Load training labels
-    let train_labels_path = PathBuf::from("dataset/train-labels.idx1-ubyte");
-    let mut file = BufReader::new(File::open(&train_labels_path)?);
-    file.read_exact(&mut buffer)?;
-    file.read_exact(&mut buffer)?;
-
-    let mut label_data = vec![0u8; n_images as usize];
-    file.read_exact(&mut label_data)?;
-
-    // Convert to one-hot encoding
-    let mut y_train_vec = vec![0.0; (n_images * 10) as usize];
-    for (i, &label) in label_data.iter().enumerate() {
-        y_train_vec[i * 10 + label as usize] = 1.0;
-    }
-    let y_train = ndarray::Array2::from_shape_vec((n_images as usize, 10), y_train_vec)?;
-
-    // Load test images
-    let test_images_path = PathBuf::from("dataset/t10k-images.idx3-ubyte");
-    let mut file = BufReader::new(File::open(&test_images_path)?);
-    file.read_exact(&mut buffer)?;
-    file.read_exact(&mut buffer)?;
-    let n_images = u32::from_be_bytes(buffer);
-    file.read_exact(&mut buffer)?;
-    file.read_exact(&mut buffer)?;
-
-    let mut image_data = vec![0u8; (n_images * 28 * 28) as usize];
-    file.read_exact(&mut image_data)?;
-    let x_test: Vec<f64> = image_data.iter().map(|&x| x as f64 / 255.0).collect();
-    let x_test = ndarray::Array2::from_shape_vec((n_images as usize, 784), x_test)?;
-
-    // Load test labels
-    let test_labels_path = PathBuf::from("dataset/t10k-labels.idx1-ubyte");
-    let mut file = BufReader::new(File::open(&test_labels_path)?);
-    file.read_exact(&mut buffer)?;
-    file.read_exact(&mut buffer)?;
-
-    let mut label_data = vec![0u8; n_images as usize];
-    file.read_exact(&mut label_data)?;
-
-    let mut y_test_vec = vec![0.0; (n_images * 10) as usize];
-    for (i, &label) in label_data.iter().enumerate() {
-        y_test_vec[i * 10 + label as usize] = 1.0;
-    }
-    let y_test = ndarray::Array2::from_shape_vec((n_images as usize, 10), y_test_vec)?;
-
-    Ok((x_train, y_train, x_test, y_test))
-}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== MNIST Training Comparison ===\n");
     println!("Loading MNIST dataset...");
 
-    let (x_train, y_train, x_test, y_test) = load_mnist_data()?;
+    let (x_train, y_train) = neural_network_scratch::load_mnist_data(
+        "dataset/train-images.idx3-ubyte",
+        "dataset/train-labels.idx1-ubyte",
+    )
+    .expect("Failed to load training data");
+
+    let (x_test, y_test) = neural_network_scratch::load_mnist_data(
+        "dataset/t10k-images.idx3-ubyte",
+        "dataset/t10k-labels.idx1-ubyte",
+    )
+    .expect("Failed to load test data");
 
     println!("Training set: {} images", x_train.nrows());
     println!("Test set: {} images\n", x_test.nrows());
@@ -144,7 +75,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Initial test accuracy: {:.2}%", initial_accuracy_genetic);
 
     // Genetic algorithm parameters
-    let generations = 500_000;
+    let generations = 50;
     let population_size = 500;
     let subset_size = 1000; // Evaluate on 1000 random training examples per fitness
 

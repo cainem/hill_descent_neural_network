@@ -3,7 +3,6 @@
 // (b) hill_descent_lib code
 // Run with: cargo run --example profile_filtered --release
 
-use ndarray::Array2;
 use neural_network_scratch::NeuralNetwork;
 use std::time::Instant;
 
@@ -17,10 +16,9 @@ fn main() {
     )
     .expect("Failed to load training data");
 
-    let nn = NeuralNetwork::new(784, 16, 10);
+    let mut nn = NeuralNetwork::new(784, 16, 10);
 
     // Measure time in our neural network code (fitness function)
-    let mut total_nn_time = 0.0;
     let mut total_hill_descent_time = 0.0;
 
     println!("Testing 10 training cycles...\n");
@@ -28,13 +26,12 @@ fn main() {
     for i in 0..10 {
         // Time spent in hill_descent_lib
         let start = Instant::now();
-        let result = nn.train_genetic(
+        let _result = nn.train_genetic(
             &x_train,
             &y_train,
             40,   // generations
             500,  // population
             1000, // subset_size
-            10,   // num_regions
         );
         let hill_descent_elapsed = start.elapsed().as_secs_f64();
         total_hill_descent_time += hill_descent_elapsed;

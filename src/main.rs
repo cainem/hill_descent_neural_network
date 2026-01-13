@@ -2,71 +2,9 @@ extern crate ndarray;
 extern crate ndarray_rand;
 extern crate rand;
 
-use ndarray::Array2;
-use neural_network_scratch::NeuralNetwork;
-use std::fs::File;
-use std::io::{self, Read, Write};
+use neural_network_scratch::{load_mnist_data, NeuralNetwork};
+use std::io::{self, Write};
 use std::path::PathBuf;
-
-fn read_u32_from_file(file: &mut File) -> Result<u32, io::Error> {
-    let mut buf = [0u8; 4];
-    file.read_exact(&mut buf)?;
-    Ok(u32::from_be_bytes(buf))
-}
-
-fn load_mnist_data(
-    images_path: PathBuf,
-    labels_path: PathBuf,
-) -> Result<(Array2<f64>, Array2<f64>), io::Error> {
-    let mut image_file = File::open(images_path).expect("Failed to open file");
-    let mut label_file = File::open(labels_path).expect("Failed to open file");
-
-    // Read header information
-    let _magic_images =
-        read_u32_from_file(&mut image_file).expect("Failed to read header information");
-    let num_images =
-        read_u32_from_file(&mut image_file).expect("Failed to read header information");
-    let num_rows = read_u32_from_file(&mut image_file).expect("Failed to read header information");
-    let num_cols = read_u32_from_file(&mut image_file).expect("Failed to read header information");
-
-    let _magic_labels =
-        read_u32_from_file(&mut label_file).expect("Failed to read header information");
-    let num_labels =
-        read_u32_from_file(&mut label_file).expect("Failed to read header information");
-
-    assert_eq!(
-        num_images, num_labels,
-        "Number of images and labels do not match"
-    );
-
-    let mut image_data = vec![0u8; (num_images * num_rows * num_cols) as usize];
-    image_file.read_exact(&mut image_data)?;
-
-    let images = Array2::from_shape_vec(
-        (num_images as usize, (num_rows * num_cols) as usize),
-        image_data.into_iter().map(|x| x as f64 / 255.0).collect(),
-    )
-    .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-
-    // Read label data
-    let mut label_data = vec![0u8; num_labels as usize];
-    label_file.read_exact(&mut label_data)?;
-
-    let labels = Array2::from_shape_vec(
-        (num_labels as usize, 10),
-        label_data
-            .into_iter()
-            .flat_map(|label| {
-                let mut one_hot = vec![0.0; 10];
-                one_hot[label as usize] = 1.0;
-                one_hot
-            })
-            .collect(),
-    )
-    .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-
-    Ok((images, labels))
-}
 
 fn get_user_input(prompt: &str) -> String {
     print!("{}", prompt);

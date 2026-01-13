@@ -1,5 +1,5 @@
 use super::NeuralNetwork;
-use hill_descent_lib::SingleValuedFunction;
+use hill_descent_lib3::SingleValuedFunction;
 use ndarray::Array2;
 use rand::seq::SliceRandom;
 use rand::SeedableRng;

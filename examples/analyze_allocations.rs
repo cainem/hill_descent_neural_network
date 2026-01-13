@@ -53,14 +53,6 @@ fn load_mnist_subset() -> (Array2<f64>, Array2<f64>) {
 fn main() {
     println!("=== Allocation Analysis: Genetic Training ===\n");
 
-    // Check system allocator stats before
-    #[cfg(target_os = "windows")]
-    {
-        use std::alloc::{GlobalAlloc, Layout, System};
-
-        println!("Analyzing allocations during fitness evaluation...\n");
-    }
-
     println!("Loading MNIST subset...");
     let (x_train, y_train) = load_mnist_subset();
     println!("Loaded {} examples", x_train.nrows());
@@ -80,23 +72,23 @@ fn main() {
     println!("   - W2: 16 × 10 = 160 f64 = ~1.3 KB");
     println!("   - b2: 10 f64 = ~80 bytes");
     println!("   - Total per network: ~102 KB");
-    println!("");
+    println!();
     println!("2. unflatten_parameters() - no new allocations (reuses existing arrays)");
-    println!("");
+    println!();
     println!("3. feed_forward() per example:");
     println!("   - hidden activations: 16 f64 = ~128 bytes");
     println!("   - output activations: 10 f64 = ~80 bytes");
     println!("   - Total per forward pass: ~208 bytes");
-    println!("");
+    println!();
     println!("4. Per fitness evaluation (1000 examples):");
     println!("   - 1 × NeuralNetwork::new: ~102 KB");
     println!("   - 1000 × feed_forward: ~203 KB");
     println!("   - Total: ~305 KB per evaluation");
-    println!("");
+    println!();
     println!("5. For 500 organisms per generation:");
     println!("   - 500 × 305 KB = ~153 MB per generation");
     println!("   - With parallelism: 5-10 concurrent = ~1.5 GB working set");
-    println!("");
+    println!();
 
     println!("Running 5 generations to demonstrate...\n");
     let start = Instant::now();
@@ -107,17 +99,17 @@ fn main() {
     println!("Best loss: {:.6}", best_loss);
     println!("Time reported: {:.2}s", time);
     println!("Time measured: {:.2}s", elapsed.as_secs_f64());
-    println!("");
+    println!();
     println!("ANALYSIS:");
     println!("========");
     println!("The main allocation hotspot is creating ~500 temporary NeuralNetwork");
     println!("instances per generation. Each network allocates ~102 KB for weights.");
-    println!("");
+    println!();
     println!("With parallel evaluation (~5-10 concurrent), this means:");
     println!("  - Constant allocation/deallocation of 102 KB objects");
     println!("  - Memory allocator contention between threads");
     println!("  - Cache thrashing as different threads work on different networks");
-    println!("");
+    println!();
     println!("OPTIMIZATION OPPORTUNITIES:");
     println!("1. Pool network instances (reuse instead of recreate)");
     println!("2. Batch evaluations to amortize network creation");

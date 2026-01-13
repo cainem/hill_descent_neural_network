@@ -10,7 +10,6 @@ use neural_network_scratch::NeuralNetwork;
 use std::fs::File;
 use std::io::Read;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
 use std::time::Instant;
 
 // Global counters for timing (in nanoseconds)

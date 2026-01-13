@@ -1,9 +1,9 @@
 use ndarray::Array2;
 use neural_network_scratch::neural_network::NeuralNetwork;
 
-#[cfg(feature = "dhat")]
-#[global_allocator]
-static ALLOC: dhat::Alloc = dhat::Alloc;
+// #[cfg(feature = "dhat")]
+// #[global_allocator]
+// static ALLOC: dhat::Alloc = dhat::Alloc;
 
 fn load_mnist_subset() -> (Array2<f64>, Array2<f64>) {
     use std::fs::File;
@@ -18,14 +18,14 @@ fn load_mnist_subset() -> (Array2<f64>, Array2<f64>) {
     // Load training images
     let mut img_file = File::open("dataset/train-images.idx3-ubyte").unwrap();
     let _magic = read_u32(&mut img_file);
-    let n_images = read_u32(&mut img_file) as usize;
+    let _n_images = read_u32(&mut img_file) as usize;
     let n_rows = read_u32(&mut img_file) as usize;
     let n_cols = read_u32(&mut img_file) as usize;
 
     // Load training labels
     let mut lbl_file = File::open("dataset/train-labels.idx1-ubyte").unwrap();
     let _magic = read_u32(&mut lbl_file);
-    let n_labels = read_u32(&mut lbl_file) as usize;
+    let _n_labels = read_u32(&mut lbl_file) as usize;
 
     // Take only 1000 examples for profiling
     let subset_size = 1000;
