@@ -30,7 +30,10 @@ echo "This will collect call stack data with symbols"
 echo ""
 
 # Run perf record with call-graph support
-perf record -F 997 --call-graph dwarf -o /output/perf.data \
+# Lower frequency + larger mmap buffer reduces dropped samples on busy systems.
+PERF_FREQ="${PERF_FREQ:-99}"
+PERF_MMAP_PAGES="${PERF_MMAP_PAGES:-2048}"
+perf record -F "${PERF_FREQ}" --call-graph dwarf --mmap-pages "${PERF_MMAP_PAGES}" -o /output/perf.data \
     ./target/release/examples/profile_genetic_instrumented
 
 echo ""

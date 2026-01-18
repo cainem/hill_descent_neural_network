@@ -1,5 +1,5 @@
 # Dockerfile for Rust profiling with cargo-flamegraph
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 
 # Avoid timezone prompts
 ENV DEBIAN_FRONTEND=noninteractive
@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y \
     curl \
     build-essential \
     git \
+    python3 \
     linux-tools-generic \
     linux-tools-common \
     && rm -rf /var/lib/apt/lists/*
@@ -23,9 +24,17 @@ RUN cargo install inferno
 # Install addr2line and other symbol tools
 RUN cargo install addr2line
 
-# Fix perf for WSL2 kernel - symlink generic tools to WSL2 kernel version
-RUN mkdir -p /usr/lib/linux-tools/6.6.87.2-microsoft-standard-WSL2 && \
-    ln -sf /usr/lib/linux-tools/5.15.0-161-generic/* /usr/lib/linux-tools/6.6.87.2-microsoft-standard-WSL2/
+# Fix perf for WSL2 kernel - symlink generic tools to the running kernel version
+RUN set -eux; \
+    tools_root="/usr/lib/linux-tools"; \
+    wsl_kernel="$(uname -r)"; \
+    mkdir -p "${tools_root}/${wsl_kernel}"; \
+    source_dir="$(ls -1 "${tools_root}" | grep -v 'microsoft-standard-WSL2' | head -n 1 || true)"; \
+    if [ -n "${source_dir}" ] && [ -d "${tools_root}/${source_dir}" ]; then \
+        ln -sf "${tools_root}/${source_dir}"/* "${tools_root}/${wsl_kernel}/"; \
+    else \
+        echo "No linux-tools directory found under ${tools_root}; perf may not work under WSL2."; \
+    fi
 
 # Set working directory
 WORKDIR /workspace
