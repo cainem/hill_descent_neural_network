@@ -1,5 +1,5 @@
 use super::NeuralNetwork;
-use hill_descent_lib3::SingleValuedFunction;
+use hill_descent_lib::SingleValuedFunction;
 use ndarray::Array2;
 use rand::seq::SliceRandom;
 use rand::SeedableRng;
@@ -75,7 +75,7 @@ impl GeneticFitness {
 
     /// Generates a random subset of indices without replacement.
     fn generate_random_indices(total: usize, count: usize) -> Vec<usize> {
-        let mut rng = rand::rngs::StdRng::from_entropy();
+        let mut rng = rand::rngs::StdRng::from_os_rng();
         let mut indices: Vec<usize> = (0..total).collect();
         indices.shuffle(&mut rng);
         indices.truncate(count);

@@ -6,10 +6,10 @@ extern crate rand;
 extern crate serde_derive;
 
 // Module declarations
+pub mod data_loader;
 pub mod neural_network;
 pub mod sigmoid;
-pub mod data_loader;
 
 // Re-export the main struct for convenience
-pub use neural_network::NeuralNetwork;
 pub use data_loader::load_mnist_data;
+pub use neural_network::NeuralNetwork;

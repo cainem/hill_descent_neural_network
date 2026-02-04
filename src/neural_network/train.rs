@@ -186,7 +186,7 @@ mod tests {
         let initial_loss = total_loss / x_train.nrows() as f64;
 
         // Train for many epochs
-        nn.train(&x_train, &y_train, 100, 0.1);
+        nn.train(&x_train, &y_train, 150, 0.1);
 
         // Compute final loss
         let mut total_loss = 0.0;

@@ -27,9 +27,7 @@ fn main() {
         // Time spent in hill_descent_lib
         let start = Instant::now();
         let _result = nn.train_genetic(
-            &x_train,
-            &y_train,
-            40,   // generations
+            &x_train, &y_train, 40,   // generations
             500,  // population
             1000, // subset_size
         );
@@ -43,6 +41,9 @@ fn main() {
     }
 
     println!("\n=== Summary ===");
-    println!("Total time in train_genetic (hill_descent_lib calls): {:.2}s", total_hill_descent_time);
+    println!(
+        "Total time in train_genetic (hill_descent_lib calls): {:.2}s",
+        total_hill_descent_time
+    );
     println!("Average per cycle: {:.2}s", total_hill_descent_time / 10.0);
 }

@@ -75,15 +75,13 @@ fn main() {
 
     // Run genetic training
     let total_start = Instant::now();
-    
+
     let (initial_loss, final_loss) = nn.train_genetic(
-        &x_train,
-        &y_train,
-        40,   // generations
+        &x_train, &y_train, 40,   // generations
         500,  // population
         1000, // subset_size
     );
-    
+
     let total_time = total_start.elapsed().as_secs_f64();
 
     // Get fitness function timing
@@ -102,12 +100,21 @@ fn main() {
     println!("(a) neural_network_scratch time (fitness evaluation):");
     println!("    Time: {:.2}s ({:.1}%)", fitness_time_s, fitness_pct);
     println!("    Calls: {}", fitness_calls);
-    println!("    Avg per call: {:.3}ms", (fitness_time_s / fitness_calls as f64) * 1000.0);
+    println!(
+        "    Avg per call: {:.3}ms",
+        (fitness_time_s / fitness_calls as f64) * 1000.0
+    );
     println!();
     println!("(b) hill_descent_lib time (GA operations):");
-    println!("    Time: {:.2}s ({:.1}%)", hill_descent_time, hill_descent_pct);
+    println!(
+        "    Time: {:.2}s ({:.1}%)",
+        hill_descent_time, hill_descent_pct
+    );
     println!();
     println!("Initial loss: {:.6}", initial_loss);
     println!("Final loss: {:.6}", final_loss);
-    println!("Improvement: {:.2}%", ((initial_loss - final_loss) / initial_loss) * 100.0);
+    println!(
+        "Improvement: {:.2}%",
+        ((initial_loss - final_loss) / initial_loss) * 100.0
+    );
 }

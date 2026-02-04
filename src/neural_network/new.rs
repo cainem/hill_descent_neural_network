@@ -30,13 +30,13 @@ impl NeuralNetwork {
             hidden_size,
             output_size,
             // W1 shape: (input_size × hidden_size) - transforms input to hidden layer
-            W1: Array::random((input_size, hidden_size), Uniform::new(-1.0, 1.0)),
+            W1: Array::random((input_size, hidden_size), Uniform::new(-1.0, 1.0).unwrap()),
             // W2 shape: (hidden_size × output_size) - transforms hidden to output layer
-            W2: Array::random((hidden_size, output_size), Uniform::new(-1.0, 1.0)),
+            W2: Array::random((hidden_size, output_size), Uniform::new(-1.0, 1.0).unwrap()),
             // b1 shape: (hidden_size) - biases for hidden layer neurons
-            b1: Array::random(hidden_size, Uniform::new(-1.0, 1.0)),
+            b1: Array::random(hidden_size, Uniform::new(-1.0, 1.0).unwrap()),
             // b2 shape: (output_size) - biases for output layer neurons
-            b2: Array::random(output_size, Uniform::new(-1.0, 1.0)),
+            b2: Array::random(output_size, Uniform::new(-1.0, 1.0).unwrap()),
         }
     }
 }

@@ -1,6 +1,6 @@
 use super::genetic_fitness::GeneticFitness;
 use super::NeuralNetwork;
-use hill_descent_lib3::{setup_world, GlobalConstants, TrainingData};
+use hill_descent_lib::{setup_world, GlobalConstants, TrainingData};
 use ndarray::Array2;
 use std::ops::RangeInclusive;
 use std::sync::Arc;
@@ -119,8 +119,7 @@ impl NeuralNetwork {
         }
 
         // Extract best organism's parameters and update the network
-        let best_organism = world.get_best_organism(TrainingData::None { floor_value: 0.0 });
-        let best_params = best_organism.problem_parameters();
+        let best_params = world.get_best_params();
         self.unflatten_parameters(&best_params);
 
         let training_time = start_time.elapsed().as_secs_f64();
