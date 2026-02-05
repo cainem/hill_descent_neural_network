@@ -77,9 +77,9 @@ fn main() {
     let total_start = Instant::now();
 
     let (initial_loss, final_loss) = nn.train_genetic(
-        &x_train, &y_train, 40,   // generations
-        500,  // population
-        1000, // subset_size
+        &x_train, &y_train, 1000, // generations
+        500, // population
+        100, // subset_size
     );
 
     let total_time = total_start.elapsed().as_secs_f64();

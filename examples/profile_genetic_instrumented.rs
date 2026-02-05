@@ -10,9 +10,9 @@ use std::time::Instant;
 fn main() {
     println!("=== Instrumented Genetic Training Profile ===\n");
     println!("Network: 784-16-10 (12,730 parameters)");
-    println!("Generations: 40");
+    println!("Generations: 1000");
     println!("Population: 500");
-    println!("Subset size: 1000\n");
+    println!("Subset size: 100\n");
 
     // Create training data
     let data_start = Instant::now();
@@ -57,11 +57,11 @@ fn main() {
     // Single fitness evaluation test
     let fitness_start = Instant::now();
     let _loss = nn.evaluate_loss(
-        &x_train.slice(ndarray::s![0..1000, ..]).to_owned(),
-        &y_train.slice(ndarray::s![0..1000, ..]).to_owned(),
+        &x_train.slice(ndarray::s![0..100, ..]).to_owned(),
+        &y_train.slice(ndarray::s![0..100, ..]).to_owned(),
     );
     let fitness_time = fitness_start.elapsed().as_secs_f64();
-    println!("Single fitness eval (1000 examples): {:.6}s", fitness_time);
+    println!("Single fitness eval (100 examples): {:.6}s", fitness_time);
     println!(
         "Estimated fitness evals per second: {:.0}\n",
         1.0 / fitness_time
@@ -71,9 +71,9 @@ fn main() {
     println!("Starting full genetic training...\n");
     let train_start = Instant::now();
     let (final_loss, training_time) = nn.train_genetic(
-        &x_train, &y_train, 40,   // generations
+        &x_train, &y_train, 1000, // generations
         500,  // population size
-        1000, // subset size
+        100,  // subset size
     );
     let total_time = train_start.elapsed().as_secs_f64();
 
@@ -83,7 +83,7 @@ fn main() {
     println!();
 
     // Calculate derived metrics
-    let generations = 40;
+    let generations = 1000;
     let population = 500;
     let total_evaluations = generations * population;
 

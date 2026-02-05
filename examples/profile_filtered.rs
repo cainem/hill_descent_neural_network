@@ -27,9 +27,9 @@ fn main() {
         // Time spent in hill_descent_lib
         let start = Instant::now();
         let _result = nn.train_genetic(
-            &x_train, &y_train, 40,   // generations
-            500,  // population
-            1000, // subset_size
+            &x_train, &y_train, 1000, // generations
+            500, // population
+            100, // subset_size
         );
         let hill_descent_elapsed = start.elapsed().as_secs_f64();
         total_hill_descent_time += hill_descent_elapsed;

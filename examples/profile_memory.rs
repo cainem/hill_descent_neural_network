@@ -27,8 +27,8 @@ fn load_mnist_subset() -> (Array2<f64>, Array2<f64>) {
     let _magic = read_u32(&mut lbl_file);
     let _n_labels = read_u32(&mut lbl_file) as usize;
 
-    // Take only 1000 examples for profiling
-    let subset_size = 1000;
+    // Take only 100 examples for profiling
+    let subset_size = 100;
     let pixel_count = n_rows * n_cols;
 
     let mut x_data = vec![0.0; subset_size * pixel_count];

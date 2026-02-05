@@ -24,8 +24,8 @@ fn load_mnist_subset() -> (Array2<f64>, Array2<f64>) {
     let _magic = read_u32(&mut lbl_file);
     let _n_labels = read_u32(&mut lbl_file) as usize;
 
-    // Take only 1000 examples for profiling
-    let subset_size = 1000;
+    // Take only 100 examples for profiling
+    let subset_size = 100;
     let pixel_count = n_rows * n_cols;
 
     let mut x_data = vec![0.0; subset_size * pixel_count];
@@ -80,19 +80,19 @@ fn main() {
     println!("   - output activations: 10 f64 = ~80 bytes");
     println!("   - Total per forward pass: ~208 bytes");
     println!();
-    println!("4. Per fitness evaluation (1000 examples):");
+    println!("4. Per fitness evaluation (100 examples):");
     println!("   - 1 × NeuralNetwork::new: ~102 KB");
-    println!("   - 1000 × feed_forward: ~203 KB");
-    println!("   - Total: ~305 KB per evaluation");
+    println!("   - 100 × feed_forward: ~20.3 KB");
+    println!("   - Total: ~122 KB per evaluation");
     println!();
     println!("5. For 500 organisms per generation:");
-    println!("   - 500 × 305 KB = ~153 MB per generation");
-    println!("   - With parallelism: 5-10 concurrent = ~1.5 GB working set");
+    println!("   - 500 × 122 KB = ~61 MB per generation");
+    println!("   - With parallelism: 5-10 concurrent = ~0.6 GB working set");
     println!();
 
     println!("Running 5 generations to demonstrate...\n");
     let start = Instant::now();
-    let (best_loss, time) = nn.train_genetic(&x_train, &y_train, 5, 500, 1000);
+    let (best_loss, time) = nn.train_genetic(&x_train, &y_train, 5, 500, 100);
     let elapsed = start.elapsed();
 
     println!("\nTraining complete!");

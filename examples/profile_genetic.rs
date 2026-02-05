@@ -9,7 +9,7 @@ use neural_network_scratch::NeuralNetwork;
 
 fn main() {
     println!("Starting genetic training profiling run...");
-    println!("This will run 40 generations with 784-16-10 network\n");
+    println!("This will run 1000 generations with 784-16-10 network\n");
 
     // Create training data
     let n_examples = 2000;
@@ -29,9 +29,9 @@ fn main() {
     // Train with genetic algorithm
     let mut nn = NeuralNetwork::new(784, 16, 10);
     let (final_loss, training_time) = nn.train_genetic(
-        &x_train, &y_train, 40,   // generations (enough to profile, not too many)
-        500,  // population size
-        1000, // subset size
+        &x_train, &y_train, 1000, // generations
+        500, // population
+        100, // subset_size
     );
 
     println!("\nProfiling complete!");

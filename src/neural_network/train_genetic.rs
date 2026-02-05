@@ -2,6 +2,8 @@ use super::genetic_fitness::GeneticFitness;
 use super::NeuralNetwork;
 use hill_descent_lib::{setup_world, GlobalConstants, TrainingData};
 use ndarray::Array2;
+use rand::seq::SliceRandom;
+use rand::SeedableRng;
 use std::ops::RangeInclusive;
 use std::sync::Arc;
 use std::time::Instant;
@@ -25,7 +27,7 @@ impl NeuralNetwork {
     /// * `y_train` - Training labels as 2D array (rows=examples, cols=10 one-hot)
     /// * `generations` - Number of evolutionary generations to run
     /// * `population_size` - Number of organisms per generation (recommend 500)
-    /// * `subset_size` - Number of training examples to evaluate per fitness (recommend 1000)
+    /// * `subset_size` - Number of training examples to evaluate per fitness (recommend 100)
     ///
     /// # Returns
     /// Tuple of (final_loss, training_time_seconds)
@@ -42,9 +44,9 @@ impl NeuralNetwork {
     /// let (final_loss, training_time) = nn.train_genetic(
     ///     &x_train,
     ///     &y_train,
-    ///     100,   // generations
+    ///     1000,  // generations
     ///     500,   // population
-    ///     1000,  // subset size
+    ///     100,   // subset size
     /// );
     /// ```
     ///
@@ -81,8 +83,11 @@ impl NeuralNetwork {
             Arc::new(x_train.clone()),
             Arc::new(y_train.clone()),
             subset_size,
-            100, // Regenerate subset every 100 evaluations
+            0, // Disable automatic rotation; we will rotate manually per generation
         );
+
+        // Keep a handle to rotating training data every generation
+        let subset_handle = fitness.subset_handle();
 
         // Define parameter bounds
         // Using [-3.0, 3.0] range for weights/biases (wider than typical initialization)
@@ -102,6 +107,17 @@ impl NeuralNetwork {
 
         // Run evolutionary generations
         for generation in 1..=generations {
+            // Rotate subset for the new generation
+            // This prevents overfitting to a specific subset
+            {
+                let mut indices = subset_handle.write().unwrap();
+                let mut rng = rand::rngs::StdRng::from_os_rng();
+                let mut all_indices: Vec<usize> = (0..x_train.nrows()).collect();
+                all_indices.shuffle(&mut rng);
+                all_indices.truncate(subset_size);
+                *indices = all_indices;
+            }
+
             // Perform one generation of evolution
             // The library handles: fitness evaluation, selection, reproduction, mutation
             world.training_run(TrainingData::None { floor_value: 0.0 });
