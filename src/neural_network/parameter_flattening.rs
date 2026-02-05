@@ -1,5 +1,4 @@
 use super::NeuralNetwork;
-use ndarray::{Array1, Array2};
 
 impl NeuralNetwork {
     /// Flattens all network parameters (W1, W2, b1, b2) into a single vector.
@@ -24,19 +23,35 @@ impl NeuralNetwork {
     /// - b2: 10 parameters
     ///   Total: 50,890 parameters
     pub fn flatten_parameters(&self) -> Vec<f64> {
-        let mut params = Vec::new();
+        let mut params = Vec::with_capacity(self.parameter_count());
 
         // Flatten W1 (input to hidden weights)
-        params.extend(self.w1().iter().copied());
+        if let Some(slice) = self.W1.as_slice() {
+            params.extend_from_slice(slice);
+        } else {
+            params.extend(self.W1.iter().copied());
+        }
 
         // Flatten b1 (hidden layer biases)
-        params.extend(self.b1().iter().copied());
+        if let Some(slice) = self.b1.as_slice() {
+            params.extend_from_slice(slice);
+        } else {
+            params.extend(self.b1.iter().copied());
+        }
 
         // Flatten W2 (hidden to output weights)
-        params.extend(self.w2().iter().copied());
+        if let Some(slice) = self.W2.as_slice() {
+            params.extend_from_slice(slice);
+        } else {
+            params.extend(self.W2.iter().copied());
+        }
 
         // Flatten b2 (output layer biases)
-        params.extend(self.b2().iter().copied());
+        if let Some(slice) = self.b2.as_slice() {
+            params.extend_from_slice(slice);
+        } else {
+            params.extend(self.b2.iter().copied());
+        }
 
         params
     }
@@ -56,33 +71,58 @@ impl NeuralNetwork {
     /// Panics if the parameter vector doesn't contain the expected number of elements
     ///
     /// # Implementation Notes
-    /// - Uses `from_shape_vec` which consumes the vector for efficient reconstruction
+    /// - Updates existing arrays in-place to avoid allocations
     /// - Parameters are extracted in the same order they were flattened
     pub fn unflatten_parameters(&mut self, params: &[f64]) {
+        assert_eq!(params.len(), self.parameter_count(), "Parameter count mismatch");
         let mut offset = 0;
 
         // Reconstruct W1
         let w1_size = self.input_size * self.hidden_size;
         let w1_slice = &params[offset..offset + w1_size];
-        self.W1 = Array2::from_shape_vec((self.input_size, self.hidden_size), w1_slice.to_vec())
-            .expect("Failed to reshape W1");
+        if let Some(slice) = self.W1.as_slice_mut() {
+            slice.copy_from_slice(w1_slice);
+        } else {
+            for (i, &val) in self.W1.iter_mut().zip(w1_slice) {
+                *i = val;
+            }
+        }
         offset += w1_size;
 
         // Reconstruct b1
-        let b1_slice = &params[offset..offset + self.hidden_size];
-        self.b1 = Array1::from_vec(b1_slice.to_vec());
-        offset += self.hidden_size;
+        let b1_size = self.hidden_size;
+        let b1_slice = &params[offset..offset + b1_size];
+        if let Some(slice) = self.b1.as_slice_mut() {
+            slice.copy_from_slice(b1_slice);
+        } else {
+            for (i, &val) in self.b1.iter_mut().zip(b1_slice) {
+                *i = val;
+            }
+        }
+        offset += b1_size;
 
         // Reconstruct W2
         let w2_size = self.hidden_size * self.output_size;
         let w2_slice = &params[offset..offset + w2_size];
-        self.W2 = Array2::from_shape_vec((self.hidden_size, self.output_size), w2_slice.to_vec())
-            .expect("Failed to reshape W2");
+        if let Some(slice) = self.W2.as_slice_mut() {
+            slice.copy_from_slice(w2_slice);
+        } else {
+            for (i, &val) in self.W2.iter_mut().zip(w2_slice) {
+                *i = val;
+            }
+        }
         offset += w2_size;
 
         // Reconstruct b2
-        let b2_slice = &params[offset..offset + self.output_size];
-        self.b2 = Array1::from_vec(b2_slice.to_vec());
+        let b2_size = self.output_size;
+        let b2_slice = &params[offset..offset + b2_size];
+        if let Some(slice) = self.b2.as_slice_mut() {
+            slice.copy_from_slice(b2_slice);
+        } else {
+            for (i, &val) in self.b2.iter_mut().zip(b2_slice) {
+                *i = val;
+            }
+        }
     }
 
     /// Returns the total number of parameters in the network.

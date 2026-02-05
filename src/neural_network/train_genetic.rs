@@ -2,8 +2,6 @@ use super::genetic_fitness::GeneticFitness;
 use super::NeuralNetwork;
 use hill_descent_lib::{setup_world, GlobalConstants, TrainingData};
 use ndarray::Array2;
-use rand::seq::SliceRandom;
-use rand::SeedableRng;
 use std::ops::RangeInclusive;
 use std::sync::Arc;
 use std::time::Instant;
@@ -87,7 +85,7 @@ impl NeuralNetwork {
         );
 
         // Keep a handle to rotating training data every generation
-        let subset_handle = fitness.subset_handle();
+        let fitness_handle = fitness.clone();
 
         // Define parameter bounds
         // Using [-3.0, 3.0] range for weights/biases (wider than typical initialization)
@@ -109,14 +107,7 @@ impl NeuralNetwork {
         for generation in 1..=generations {
             // Rotate subset for the new generation
             // This prevents overfitting to a specific subset
-            {
-                let mut indices = subset_handle.write().unwrap();
-                let mut rng = rand::rngs::StdRng::from_os_rng();
-                let mut all_indices: Vec<usize> = (0..x_train.nrows()).collect();
-                all_indices.shuffle(&mut rng);
-                all_indices.truncate(subset_size);
-                *indices = all_indices;
-            }
+            fitness_handle.regenerate_subset();
 
             // Perform one generation of evolution
             // The library handles: fitness evaluation, selection, reproduction, mutation

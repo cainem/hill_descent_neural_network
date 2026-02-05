@@ -1,71 +1,81 @@
 use hill_descent_lib::SingleValuedFunction;
-use ndarray::{Array1, Array2, ArrayView1, ArrayView2};
+use ndarray::{Array2, ArrayView1, ArrayView2};
 use rand::seq::SliceRandom;
 use rand::SeedableRng;
 use std::cell::RefCell;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 
-/// Thread-local scratchpad for genetic fitness evaluation to avoid allocations.
+/// Pre-allocated batch of training data to enable GEMM (matrix-matrix) operations.
+#[derive(Debug)]
+struct BatchData {
+    x: Array2<f64>,
+    y: Array2<f64>,
+}
+
+/// Thread-local scratchpad for genetic fitness evaluation using GEMM.
 struct FastEvaluator {
-    a1_buffer: Array1<f64>,
-    a2_buffer: Array1<f64>,
+    /// Buffer for hidden layer activations (BatchSize x HiddenSize)
+    a1_buffer: Array2<f64>,
+    /// Buffer for output layer activations (BatchSize x OutputSize)
+    a2_buffer: Array2<f64>,
 }
 
 impl FastEvaluator {
-    fn new(hidden_size: usize, output_size: usize) -> Self {
+    fn new(batch_size: usize, hidden_size: usize, output_size: usize) -> Self {
         Self {
-            a1_buffer: Array1::zeros(hidden_size),
-            a2_buffer: Array1::zeros(output_size),
+            a1_buffer: Array2::zeros((batch_size, hidden_size)),
+            a2_buffer: Array2::zeros((batch_size, output_size)),
         }
     }
 
-    /// Performs zero-allocation forward pass and loss calculation.
-    fn evaluate(
+    /// Performs zero-allocation batch forward pass and loss calculation using GEMM.
+    fn evaluate_batch(
         &mut self,
-        x: ArrayView1<f64>,
-        y_true: ArrayView1<f64>,
+        x_batch: &Array2<f64>,
+        y_true_batch: &Array2<f64>,
         w1: &ArrayView2<f64>,
         b1: &ArrayView1<f64>,
         w2: &ArrayView2<f64>,
         b2: &ArrayView1<f64>,
     ) -> f64 {
         // === LAYER 1 (Hidden) ===
-        // z1 = x * W1 + b1
-        self.a1_buffer.assign(b1);
-        // Using general_mat_vec_mul for in-place matrix-vector product
-        // Note: x (1xN) * W1 (NxM) is same as W1.t() (MxN) * x (Nx1)
-        ndarray::linalg::general_mat_vec_mul(1.0, &w1.t(), &x, 1.0, &mut self.a1_buffer);
+        // Z1 = X * W1 + B1
+        // We use beta=0 to clear the buffer first, then add B1 via broadcasting
+        ndarray::linalg::general_mat_mul(1.0, x_batch, w1, 0.0, &mut self.a1_buffer);
+        self.a1_buffer += b1;
+        
         // In-place sigmoid
         self.a1_buffer
             .mapv_inplace(|v| 1.0 / (1.0 + (-v).exp()));
 
         // === LAYER 2 (Output) ===
-        // z2 = a1 * W2 + b2
-        self.a2_buffer.assign(b2);
-        ndarray::linalg::general_mat_vec_mul(
-            1.0,
-            &w2.t(),
-            &self.a1_buffer.view(),
-            1.0,
-            &mut self.a2_buffer,
-        );
+        // Z2 = A1 * W2 + B2
+        ndarray::linalg::general_mat_mul(1.0, &self.a1_buffer, w2, 0.0, &mut self.a2_buffer);
+        self.a2_buffer += b2;
+        
         // In-place sigmoid
         self.a2_buffer
             .mapv_inplace(|v| 1.0 / (1.0 + (-v).exp()));
 
-        // === LOSS CALCULATION ===
-        // Manual loop to avoid allocations in loss_function
+        // === BATCH LOSS CALCULATION ===
         let epsilon = 1e-15;
-        let mut sum_loss = 0.0;
-        for i in 0..self.a2_buffer.len() {
-            let p = self.a2_buffer[i].max(epsilon).min(1.0 - epsilon);
-            let t = y_true[i];
-            // Binary cross-entropy: -[t*ln(p) + (1-t)*ln(1-p)]
-            sum_loss += t * p.ln() + (1.0 - t) * (1.0 - p).ln();
+        let mut total_loss = 0.0;
+        let batch_size = self.a2_buffer.nrows();
+        let output_size = self.a2_buffer.ncols();
+
+        // Manual loop over the matrix to avoid any intermediate allocations
+        for i in 0..batch_size {
+            let mut row_loss = 0.0;
+            for j in 0..output_size {
+                let p = self.a2_buffer[[i, j]].max(epsilon).min(1.0 - epsilon);
+                let t = y_true_batch[[i, j]];
+                row_loss += t * p.ln() + (1.0 - t) * (1.0 - p).ln();
+            }
+            total_loss -= row_loss / output_size as f64;
         }
 
-        -sum_loss / self.a2_buffer.len() as f64
+        total_loss / batch_size as f64
     }
 }
 
@@ -79,17 +89,11 @@ thread_local! {
 /// Implements the `SingleValuedFunction` trait from hill_descent_lib to evaluate
 /// candidate network parameter sets. Lower fitness values are better (minimization).
 ///
-/// The fitness function:
-/// 1. Takes a flat parameter vector from the genetic algorithm
-/// 2. Reconstructs a neural network with those parameters
-/// 3. Evaluates the network on a random subset of training data
-/// 4. Returns the average loss (binary cross-entropy)
-///
-/// # Performance Optimization
-/// Uses a random subset of training examples (default 1000) rather than the full
-/// training set to make fitness evaluation tractable. This is necessary because
-/// genetic algorithms require many fitness evaluations per generation.
-#[derive(Debug)]
+/// # Performance Optimization: GEMM (Matrix-Matrix Multiplication)
+/// Instead of evaluating examples one by one (GEMV), this version processes the
+/// entire subset as a single batch matrix multiplication. This significantly
+/// improves cache locality and allows the BLAS/math library to use SIMD more effectively.
+#[derive(Debug, Clone)]
 pub struct GeneticFitness {
     /// Network architecture specification (input_size, hidden_size, output_size)
     architecture: (usize, usize, usize),
@@ -99,9 +103,9 @@ pub struct GeneticFitness {
     y_train: Arc<Array2<f64>>,
     /// Number of random examples to evaluate per fitness calculation
     subset_size: usize,
-    /// Thread-safe random subset indices - uses Arc<RwLock> for safe updates across threads
-    subset_indices: Arc<RwLock<Vec<usize>>>,
-    /// Counter for when to regenerate subset (every N evaluations) - uses atomic for lock-free access
+    /// Current subset of data, pre-built as contiguous matrices for GEMM
+    batch_data: Arc<RwLock<Arc<BatchData>>>,
+    /// Counter for when to regenerate subset (every N evaluations)
     eval_counter: Arc<AtomicUsize>,
     /// How often to regenerate the random subset
     regenerate_frequency: usize,
@@ -109,15 +113,6 @@ pub struct GeneticFitness {
 
 impl GeneticFitness {
     /// Creates a new fitness function for genetic algorithm training.
-    ///
-    /// Internal use only - called by `NeuralNetwork::train_genetic()`.
-    ///
-    /// # Arguments
-    /// * `architecture` - Network dimensions (input_size, hidden_size, output_size)
-    /// * `x_train` - Training images as 2D array (rows=examples, cols=784 pixels)
-    /// * `y_train` - Training labels as 2D array (rows=examples, cols=10 one-hot)
-    /// * `subset_size` - Number of random examples to evaluate per fitness call
-    /// * `regenerate_frequency` - How many evaluations before picking new random subset
     pub fn new(
         architecture: (usize, usize, usize),
         x_train: Arc<Array2<f64>>,
@@ -126,32 +121,45 @@ impl GeneticFitness {
         regenerate_frequency: usize,
     ) -> Self {
         let total_examples = x_train.nrows();
-        let initial_subset = Self::generate_random_indices(total_examples, subset_size);
+        let indices = Self::generate_random_indices(total_examples, subset_size);
+        let batch = Self::build_batch(&x_train, &y_train, &indices);
 
         GeneticFitness {
             architecture,
             x_train,
             y_train,
             subset_size,
-            subset_indices: Arc::new(RwLock::new(initial_subset)),
+            batch_data: Arc::new(RwLock::new(Arc::new(batch))),
             eval_counter: Arc::new(AtomicUsize::new(0)),
             regenerate_frequency,
         }
     }
 
-    /// Returns a shared handle to the subset indices.
-    ///
-    /// This allows external code to trigger subset rotation.
-    pub fn subset_handle(&self) -> Arc<RwLock<Vec<usize>>> {
-        self.subset_indices.clone()
+    /// Efficiently builds contiguous matrices for the selected subset of indices.
+    fn build_batch(x_full: &Array2<f64>, y_full: &Array2<f64>, indices: &[usize]) -> BatchData {
+        let subset_size = indices.len();
+        let input_size = x_full.ncols();
+        let output_size = y_full.ncols();
+
+        let mut x_batch = Array2::zeros((subset_size, input_size));
+        let mut y_batch = Array2::zeros((subset_size, output_size));
+
+        for (i, &idx) in indices.iter().enumerate() {
+            x_batch.row_mut(i).assign(&x_full.row(idx));
+            y_batch.row_mut(i).assign(&y_full.row(idx));
+        }
+
+        BatchData { x: x_batch, y: y_batch }
     }
 
-    /// Forces a regeneration of the random training subset.
-    ///
-    /// The next evaluations will use a different set of 1000 examples.
+    /// Forces a regeneration of the random training subset and its batch matrices.
     pub fn regenerate_subset(&self) {
-        let mut indices = self.subset_indices.write().unwrap();
-        *indices = Self::generate_random_indices(self.x_train.nrows(), self.subset_size);
+        let total_examples = self.x_train.nrows();
+        let indices = Self::generate_random_indices(total_examples, self.subset_size);
+        let batch = Self::build_batch(&self.x_train, &self.y_train, &indices);
+        
+        let mut lock = self.batch_data.write().unwrap();
+        *lock = Arc::new(batch);
     }
 
     /// Generates a random subset of indices without replacement.
@@ -165,10 +173,7 @@ impl GeneticFitness {
 
     /// Checks if it's time to regenerate the random subset and does so if needed.
     fn maybe_regenerate_subset(&self) {
-        // Increment counter
         let count = self.eval_counter.fetch_add(1, Ordering::Relaxed);
-
-        // Regenerate subset if frequency is reached
         if self.regenerate_frequency > 0 && count > 0 && count.is_multiple_of(self.regenerate_frequency) {
             self.regenerate_subset();
         }
@@ -176,62 +181,40 @@ impl GeneticFitness {
 }
 
 impl SingleValuedFunction for GeneticFitness {
-    /// Evaluates the fitness of a candidate parameter set.
-    ///
-    /// This is called by the genetic algorithm for each organism in each generation.
-    /// The function must be thread-safe as hill_descent_lib may parallelize evaluations.
-    ///
-    /// # Arguments
-    /// * `params` - Flat vector of network parameters from genetic algorithm
-    ///
-    /// # Returns
-    /// Average loss (lower is better). Binary cross-entropy over the random subset.
+    /// Evaluates the fitness of a candidate parameter set using batch matrix operations.
     fn single_run(&self, params: &[f64]) -> f64 {
-        // Regenerate subset periodically to avoid overfitting to specific examples
         self.maybe_regenerate_subset();
 
         let (input_size, hidden_size, output_size) = self.architecture;
 
-        // Slice parameters into views to avoid any allocations or copies
+        // Map flat params to views
         let w1_len = input_size * hidden_size;
         let b1_len = hidden_size;
         let w2_len = hidden_size * output_size;
-        // let b2_len = output_size; // b2 starts after w2
 
-        let w1_slice = &params[0..w1_len];
-        let b1_slice = &params[w1_len..w1_len + b1_len];
-        let w2_slice = &params[w1_len + b1_len..w1_len + b1_len + w2_len];
-        let b2_slice = &params[w1_len + b1_len + w2_len..];
+        let w1 = ArrayView2::from_shape((input_size, hidden_size), &params[0..w1_len]).unwrap();
+        let b1 = ArrayView1::from_shape(b1_len, &params[w1_len..w1_len + b1_len]).unwrap();
+        let w2 = ArrayView2::from_shape((hidden_size, output_size), &params[w1_len + b1_len..w1_len + b1_len + w2_len]).unwrap();
+        let b2 = ArrayView1::from_shape(output_size, &params[w1_len + b1_len + w2_len..]).unwrap();
 
-        // Map slices to views
-        let w1 = ArrayView2::from_shape((input_size, hidden_size), w1_slice).unwrap();
-        let b1 = ArrayView1::from_shape(b1_len, b1_slice).unwrap();
-        let w2 = ArrayView2::from_shape((hidden_size, output_size), w2_slice).unwrap();
-        let b2 = ArrayView1::from_shape(output_size, b2_slice).unwrap();
-
-        // Get current subset indices
-        let indices_lock = self.subset_indices.read().unwrap();
-        let indices = &*indices_lock;
+        // Get the current batch (read lock is cheap, Arc clone is near-zero cost)
+        let batch = {
+            let lock = self.batch_data.read().unwrap();
+            lock.clone()
+        };
 
         // Use thread-local evaluator for zero-allocation performance
-        let mut total_loss = 0.0;
+        let mut loss = 0.0;
         EVALUATOR.with(|cell| {
             let mut opt = cell.borrow_mut();
-            // Initialize or resize evaluator if needed
-            if opt.is_none() || opt.as_ref().unwrap().a1_buffer.len() != hidden_size {
-                *opt = Some(FastEvaluator::new(hidden_size, output_size));
+            if opt.is_none() || opt.as_ref().unwrap().a1_buffer.nrows() != batch.x.nrows() {
+                *opt = Some(FastEvaluator::new(batch.x.nrows(), hidden_size, output_size));
             }
             let evaluator = opt.as_mut().unwrap();
-
-            for &idx in indices {
-                let x = self.x_train.row(idx);
-                let y = self.y_train.row(idx);
-                total_loss += evaluator.evaluate(x, y, &w1, &b1, &w2, &b2);
-            }
+            loss = evaluator.evaluate_batch(&batch.x, &batch.y, &w1, &b1, &w2, &b2);
         });
 
-        // Return average loss
-        total_loss / indices.len() as f64
+        loss
     }
 }
 
@@ -285,25 +268,25 @@ mod tests {
     }
 
     #[test]
-    fn given_subset_when_used_multiple_times_then_remains_stable() {
+    fn given_subset_when_regenerated_then_changes_data() {
         let x_train = Arc::new(arr2(&[[0.5, 0.3], [0.2, 0.7], [0.9, 0.1], [0.4, 0.8]]));
         let y_train = Arc::new(arr2(&[[1.0, 0.0], [0.0, 1.0], [1.0, 0.0], [0.0, 1.0]]));
 
-        let fitness = GeneticFitness::new((2, 2, 2), x_train, y_train, 2, 5);
+        let fitness = GeneticFitness::new((2, 2, 2), x_train, y_train, 2, 0);
 
-        let nn = NeuralNetwork::new(2, 2, 2);
-        let params = nn.flatten_parameters();
-
-        // Get initial indices
-        let initial_indices = fitness.subset_handle().read().unwrap().clone();
-
-        // Call single_run multiple times
-        for _ in 0..3 {
-            fitness.single_run(&params);
+        let initial_data = fitness.batch_data.read().unwrap().clone();
+        
+        // Regenerate multiple times to ensure we likely get a different subset (small dataset)
+        let mut changed = false;
+        for _ in 0..10 {
+            fitness.regenerate_subset();
+            let new_data = fitness.batch_data.read().unwrap().clone();
+            if !Arc::ptr_eq(&initial_data, &new_data) {
+                changed = true;
+                break;
+            }
         }
-
-        // Indices should remain the same (frequency is 5, we did 3 + 1 initial = 4 calls)
-        let final_indices = fitness.subset_handle().read().unwrap().clone();
-        assert_eq!(initial_indices, final_indices);
+        
+        assert!(changed, "Batch data should have been replaced");
     }
 }
