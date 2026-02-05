@@ -1,6 +1,6 @@
 use super::NeuralNetwork;
 use crate::sigmoid::sigmoid_derivative;
-use ndarray::{Array1, Axis};
+use ndarray::{ArrayView1, Axis};
 
 impl NeuralNetwork {
     /// Performs backpropagation to compute gradients and update network weights.
@@ -33,32 +33,31 @@ impl NeuralNetwork {
     #[allow(clippy::too_many_arguments)] // All parameters are needed for backpropagation algorithm
     pub fn back_propagation(
         &mut self,
-        x: &Array1<f64>,
-        y: &Array1<f64>,
-        z1: &Array1<f64>,
-        a1: &Array1<f64>,
-        z2: &Array1<f64>,
-        a2: &Array1<f64>,
+        x: ArrayView1<f64>,
+        y: ArrayView1<f64>,
+        z1: ArrayView1<f64>,
+        a1: ArrayView1<f64>,
+        z2: ArrayView1<f64>,
+        a2: ArrayView1<f64>,
         learning_rate: f64,
     ) {
         // === OUTPUT LAYER GRADIENTS ===
 
         // Calculate the error at the output layer: how far predictions are from truth
         // d_a2 = a2 - y (derivative of binary cross-entropy with respect to a2)
-        let d_a2 = a2 - y;
+        let d_a2 = &a2 - &y;
 
         // Apply chain rule with sigmoid derivative to get gradient at z2
         // d_z2 = d_a2 * σ'(z2) where σ' is the sigmoid derivative
         // This tells us how the error changes with respect to the pre-activation values
-        let d_z2 = d_a2.clone() * sigmoid_derivative(z2);
+        let d_z2 = d_a2 * sigmoid_derivative(z2);
 
         // Calculate weight gradient for W2: how much each weight contributed to error
         // d_w2 = a1^T · d_z2
         // Shape transformation: (hidden_size, 1) · (1, output_size) = (hidden_size, output_size)
         let d_w2 = a1
-            .clone()
             .insert_axis(Axis(1))
-            .dot(&d_z2.clone().insert_axis(Axis(0)));
+            .dot(&d_z2.view().insert_axis(Axis(0)));
 
         // Bias gradient is simply the error gradient (derivative is 1)
         let d_b2 = d_z2.clone();
@@ -75,9 +74,8 @@ impl NeuralNetwork {
         // d_w1 = x^T · d_z1
         // Shape transformation: (input_size, 1) · (1, hidden_size) = (input_size, hidden_size)
         let d_w1 = x
-            .clone()
             .insert_axis(Axis(1))
-            .dot(&d_z1.clone().insert_axis(Axis(0)));
+            .dot(&d_z1.view().insert_axis(Axis(0)));
 
         // Bias gradient for hidden layer
         let d_b1 = d_z1.clone();
@@ -109,8 +107,16 @@ mod tests {
         let x = arr1(&[0.5, 0.3, 0.8]);
         let y = arr1(&[1.0, 0.0]);
 
-        let (z1, a1, z2, a2) = nn.feed_forward(x.clone()).unwrap();
-        nn.back_propagation(&x, &y, &z1, &a1, &z2, &a2, 0.01);
+        let (z1, a1, z2, a2) = nn.feed_forward(x.view()).unwrap();
+        nn.back_propagation(
+            x.view(),
+            y.view(),
+            z1.view(),
+            a1.view(),
+            z2.view(),
+            a2.view(),
+            0.01,
+        );
 
         // At least some weights should have changed
         let mut w1_changed = false;
@@ -144,8 +150,16 @@ mod tests {
         let x = arr1(&[0.5, 0.3, 0.8]);
         let y = arr1(&[1.0, 0.0]);
 
-        let (z1, a1, z2, a2) = nn.feed_forward(x.clone()).unwrap();
-        nn.back_propagation(&x, &y, &z1, &a1, &z2, &a2, 0.01);
+        let (z1, a1, z2, a2) = nn.feed_forward(x.view()).unwrap();
+        nn.back_propagation(
+            x.view(),
+            y.view(),
+            z1.view(),
+            a1.view(),
+            z2.view(),
+            a2.view(),
+            0.01,
+        );
 
         let mut b1_changed = false;
         let mut b2_changed = false;
@@ -175,18 +189,34 @@ mod tests {
         let x = arr1(&[0.5, 0.3, 0.8]);
         let y = arr1(&[1.0, 0.0]);
 
-        let (z1, a1, z2, a2) = nn1.feed_forward(x.clone()).unwrap();
+        let (z1, a1, z2, a2) = nn1.feed_forward(x.view()).unwrap();
         let original_w1 = nn1.w1().clone();
 
-        nn1.back_propagation(&x, &y, &z1, &a1, &z2, &a2, 0.001);
+        nn1.back_propagation(
+            x.view(),
+            y.view(),
+            z1.view(),
+            a1.view(),
+            z2.view(),
+            a2.view(),
+            0.001,
+        );
         let change_small = (nn1.w1()[[0, 0]] - original_w1[[0, 0]]).abs();
 
         // Reset and use larger learning rate
         let mut nn3 = NeuralNetwork::new(3, 2, 2);
-        let (z1_3, a1_3, z2_3, a2_3) = nn3.feed_forward(x.clone()).unwrap();
+        let (z1_3, a1_3, z2_3, a2_3) = nn3.feed_forward(x.view()).unwrap();
         let original_w1_3 = nn3.w1().clone();
 
-        nn3.back_propagation(&x, &y, &z1_3, &a1_3, &z2_3, &a2_3, 0.1);
+        nn3.back_propagation(
+            x.view(),
+            y.view(),
+            z1_3.view(),
+            a1_3.view(),
+            z2_3.view(),
+            a2_3.view(),
+            0.1,
+        );
         let change_large = (nn3.w1()[[0, 0]] - original_w1_3[[0, 0]]).abs();
 
         // Larger learning rate should generally cause larger changes
@@ -205,14 +235,22 @@ mod tests {
         let y = arr1(&[1.0, 0.0]);
 
         // Do forward pass
-        let (z1, a1, z2, mut a2) = nn.feed_forward(x.clone()).unwrap();
+        let (z1, a1, z2, mut a2) = nn.feed_forward(x.view()).unwrap();
 
         // Manually set output to be very close to target
         a2[0] = 0.99;
         a2[1] = 0.01;
 
         let original_w2 = nn.w2().clone();
-        nn.back_propagation(&x, &y, &z1, &a1, &z2, &a2, 0.01);
+        nn.back_propagation(
+            x.view(),
+            y.view(),
+            z1.view(),
+            a1.view(),
+            z2.view(),
+            a2.view(),
+            0.01,
+        );
 
         // Changes should be small when prediction is good
         let total_change: f64 = nn
@@ -240,8 +278,16 @@ mod tests {
         let x = arr1(&[0.5, 0.3, 0.8]);
         let y = arr1(&[1.0, 0.0]);
 
-        let (z1, a1, z2, a2) = nn.feed_forward(x.clone()).unwrap();
-        nn.back_propagation(&x, &y, &z1, &a1, &z2, &a2, 0.0);
+        let (z1, a1, z2, a2) = nn.feed_forward(x.view()).unwrap();
+        nn.back_propagation(
+            x.view(),
+            y.view(),
+            z1.view(),
+            a1.view(),
+            z2.view(),
+            a2.view(),
+            0.0,
+        );
 
         // With zero learning rate, nothing should change
         assert_eq!(nn.w1(), &original_w1);

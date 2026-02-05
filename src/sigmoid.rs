@@ -1,4 +1,4 @@
-use ndarray::Array1;
+use ndarray::{Array1, ArrayView1};
 
 /// Applies the sigmoid activation function to an array of values.
 ///
@@ -11,8 +11,8 @@ use ndarray::Array1;
 ///
 /// # Returns
 /// Array with sigmoid applied element-wise
-pub fn sigmoid(z: &Array1<f64>) -> Array1<f64> {
-    1.0 / (1.0 + (-z).mapv(f64::exp))
+pub fn sigmoid(z: ArrayView1<f64>) -> Array1<f64> {
+    1.0 / (1.0 + (-&z).mapv(f64::exp))
 }
 
 /// Computes the derivative of the sigmoid function.
@@ -28,9 +28,9 @@ pub fn sigmoid(z: &Array1<f64>) -> Array1<f64> {
 ///
 /// # Returns
 /// Array with sigmoid derivative applied element-wise
-pub fn sigmoid_derivative(z: &Array1<f64>) -> Array1<f64> {
+pub fn sigmoid_derivative(z: ArrayView1<f64>) -> Array1<f64> {
     let sig = sigmoid(z);
-    sig.clone() * (1.0 - sig)
+    &sig * (1.0 - &sig)
 }
 
 #[cfg(test)]
@@ -41,28 +41,28 @@ mod tests {
     #[test]
     fn given_zero_input_when_sigmoid_then_returns_half() {
         let input = arr1(&[0.0]);
-        let result = sigmoid(&input);
+        let result = sigmoid(input.view());
         assert!((result[0] - 0.5).abs() < 1e-10);
     }
 
     #[test]
     fn given_large_positive_input_when_sigmoid_then_approaches_one() {
         let input = arr1(&[10.0]);
-        let result = sigmoid(&input);
+        let result = sigmoid(input.view());
         assert!(result[0] > 0.9999);
     }
 
     #[test]
     fn given_large_negative_input_when_sigmoid_then_approaches_zero() {
         let input = arr1(&[-10.0]);
-        let result = sigmoid(&input);
+        let result = sigmoid(input.view());
         assert!(result[0] < 0.0001);
     }
 
     #[test]
     fn given_multiple_values_when_sigmoid_then_applies_elementwise() {
         let input = arr1(&[-2.0, 0.0, 2.0]);
-        let result = sigmoid(&input);
+        let result = sigmoid(input.view());
 
         assert!(result[0] < 0.2); // Negative input -> small output
         assert!((result[1] - 0.5).abs() < 1e-10); // Zero input -> 0.5
@@ -73,7 +73,7 @@ mod tests {
     fn given_sigmoid_output_when_sigmoid_derivative_then_returns_correct_value() {
         // At z=0, sigmoid(0)=0.5, and derivative should be 0.5*(1-0.5)=0.25
         let input = arr1(&[0.0]);
-        let result = sigmoid_derivative(&input);
+        let result = sigmoid_derivative(input.view());
         assert!((result[0] - 0.25).abs() < 1e-10);
     }
 
@@ -81,7 +81,7 @@ mod tests {
     fn given_positive_value_when_sigmoid_derivative_then_less_than_quarter() {
         // Derivative is maximum at 0, decreases as we move away
         let input = arr1(&[2.0]);
-        let result = sigmoid_derivative(&input);
+        let result = sigmoid_derivative(input.view());
         assert!(result[0] < 0.25);
         assert!(result[0] > 0.0);
     }
@@ -90,7 +90,7 @@ mod tests {
     fn given_negative_value_when_sigmoid_derivative_then_less_than_quarter() {
         // Derivative is symmetric around 0
         let input = arr1(&[-2.0]);
-        let result = sigmoid_derivative(&input);
+        let result = sigmoid_derivative(input.view());
         assert!(result[0] < 0.25);
         assert!(result[0] > 0.0);
     }
@@ -98,7 +98,7 @@ mod tests {
     #[test]
     fn given_multiple_values_when_sigmoid_derivative_then_applies_elementwise() {
         let input = arr1(&[-1.0, 0.0, 1.0]);
-        let result = sigmoid_derivative(&input);
+        let result = sigmoid_derivative(input.view());
 
         // All values should be positive and less than 0.25
         assert!(result[0] > 0.0 && result[0] < 0.25);

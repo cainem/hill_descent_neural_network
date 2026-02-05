@@ -55,12 +55,12 @@ impl NeuralNetwork {
             // Alternative approaches: batch gradient descent (all at once) or mini-batch
             for i in 0..x_train.nrows() {
                 // Extract the i-th training example and its label
-                let x = x_train.row(i).to_owned();
-                let y = y_train.row(i).to_owned();
+                let x = x_train.row(i);
+                let y = y_train.row(i);
 
                 // === FORWARD PASS ===
                 // Compute the network's prediction and all intermediate values
-                let (z1, a1, z2, a2) = match self.feed_forward(x.clone()) {
+                let (z1, a1, z2, a2) = match self.feed_forward(x) {
                     Ok(data) => data,
                     Err(e) => {
                         // If feed_forward fails (shouldn't happen with valid data),
@@ -71,11 +71,19 @@ impl NeuralNetwork {
                 };
 
                 // Calculate how wrong the prediction was and accumulate for epoch average
-                total_loss += self.loss_function(&y, &a2);
+                total_loss += self.loss_function(y, a2.view());
 
                 // === BACKWARD PASS ===
                 // Compute gradients and update weights to reduce the error
-                self.back_propagation(&x, &y, &z1, &a1, &z2, &a2, learning_rate);
+                self.back_propagation(
+                    x,
+                    y,
+                    z1.view(),
+                    a1.view(),
+                    z2.view(),
+                    a2.view(),
+                    learning_rate,
+                );
             }
 
             // Calculate and display the average loss for this epoch
@@ -178,10 +186,10 @@ mod tests {
         // Compute initial loss
         let mut total_loss = 0.0;
         for i in 0..x_train.nrows() {
-            let x = x_train.row(i).to_owned();
-            let y = y_train.row(i).to_owned();
+            let x = x_train.row(i);
+            let y = y_train.row(i);
             let (_, _, _, a2) = nn.feed_forward(x).unwrap();
-            total_loss += nn.loss_function(&y, &a2);
+            total_loss += nn.loss_function(y, a2.view());
         }
         let initial_loss = total_loss / x_train.nrows() as f64;
 
@@ -191,10 +199,10 @@ mod tests {
         // Compute final loss
         let mut total_loss = 0.0;
         for i in 0..x_train.nrows() {
-            let x = x_train.row(i).to_owned();
-            let y = y_train.row(i).to_owned();
+            let x = x_train.row(i);
+            let y = y_train.row(i);
             let (_, _, _, a2) = nn.feed_forward(x).unwrap();
-            total_loss += nn.loss_function(&y, &a2);
+            total_loss += nn.loss_function(y, a2.view());
         }
         let final_loss = total_loss / x_train.nrows() as f64;
 

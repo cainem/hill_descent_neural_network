@@ -1,10 +1,78 @@
-use super::NeuralNetwork;
 use hill_descent_lib::SingleValuedFunction;
-use ndarray::Array2;
+use ndarray::{Array1, Array2, ArrayView1, ArrayView2};
 use rand::seq::SliceRandom;
 use rand::SeedableRng;
+use std::cell::RefCell;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
+
+/// Thread-local scratchpad for genetic fitness evaluation to avoid allocations.
+struct FastEvaluator {
+    a1_buffer: Array1<f64>,
+    a2_buffer: Array1<f64>,
+}
+
+impl FastEvaluator {
+    fn new(hidden_size: usize, output_size: usize) -> Self {
+        Self {
+            a1_buffer: Array1::zeros(hidden_size),
+            a2_buffer: Array1::zeros(output_size),
+        }
+    }
+
+    /// Performs zero-allocation forward pass and loss calculation.
+    fn evaluate(
+        &mut self,
+        x: ArrayView1<f64>,
+        y_true: ArrayView1<f64>,
+        w1: &ArrayView2<f64>,
+        b1: &ArrayView1<f64>,
+        w2: &ArrayView2<f64>,
+        b2: &ArrayView1<f64>,
+    ) -> f64 {
+        // === LAYER 1 (Hidden) ===
+        // z1 = x * W1 + b1
+        self.a1_buffer.assign(b1);
+        // Using general_mat_vec_mul for in-place matrix-vector product
+        // Note: x (1xN) * W1 (NxM) is same as W1.t() (MxN) * x (Nx1)
+        ndarray::linalg::general_mat_vec_mul(1.0, &w1.t(), &x, 1.0, &mut self.a1_buffer);
+        // In-place sigmoid
+        self.a1_buffer
+            .mapv_inplace(|v| 1.0 / (1.0 + (-v).exp()));
+
+        // === LAYER 2 (Output) ===
+        // z2 = a1 * W2 + b2
+        self.a2_buffer.assign(b2);
+        ndarray::linalg::general_mat_vec_mul(
+            1.0,
+            &w2.t(),
+            &self.a1_buffer.view(),
+            1.0,
+            &mut self.a2_buffer,
+        );
+        // In-place sigmoid
+        self.a2_buffer
+            .mapv_inplace(|v| 1.0 / (1.0 + (-v).exp()));
+
+        // === LOSS CALCULATION ===
+        // Manual loop to avoid allocations in loss_function
+        let epsilon = 1e-15;
+        let mut sum_loss = 0.0;
+        for i in 0..self.a2_buffer.len() {
+            let p = self.a2_buffer[i].max(epsilon).min(1.0 - epsilon);
+            let t = y_true[i];
+            // Binary cross-entropy: -[t*ln(p) + (1-t)*ln(1-p)]
+            sum_loss += t * p.ln() + (1.0 - t) * (1.0 - p).ln();
+        }
+
+        -sum_loss / self.a2_buffer.len() as f64
+    }
+}
+
+thread_local! {
+    /// Each thread keeps its own buffers to avoid reallocation and synchronization.
+    static EVALUATOR: RefCell<Option<FastEvaluator>> = const { RefCell::new(None) };
+}
 
 /// Fitness function for genetic algorithm training of neural networks.
 ///
@@ -101,7 +169,7 @@ impl GeneticFitness {
         let count = self.eval_counter.fetch_add(1, Ordering::Relaxed);
 
         // Regenerate subset if frequency is reached
-        if self.regenerate_frequency > 0 && count > 0 && count % self.regenerate_frequency == 0 {
+        if self.regenerate_frequency > 0 && count > 0 && count.is_multiple_of(self.regenerate_frequency) {
             self.regenerate_subset();
         }
     }
@@ -118,41 +186,49 @@ impl SingleValuedFunction for GeneticFitness {
     ///
     /// # Returns
     /// Average loss (lower is better). Binary cross-entropy over the random subset.
-    ///
-    /// # Implementation Notes
-    /// - Creates a temporary network for evaluation (not modifying any shared state)
-    /// - Evaluates only on a random subset for performance
-    /// - Returns infinity if network construction or evaluation fails
     fn single_run(&self, params: &[f64]) -> f64 {
         // Regenerate subset periodically to avoid overfitting to specific examples
         self.maybe_regenerate_subset();
 
-        // Create a temporary network with the candidate parameters
         let (input_size, hidden_size, output_size) = self.architecture;
-        let mut nn = NeuralNetwork::new(input_size, hidden_size, output_size);
-        nn.unflatten_parameters(params);
 
-        // Get current subset indices (using read lock for thread-safe access)
+        // Slice parameters into views to avoid any allocations or copies
+        let w1_len = input_size * hidden_size;
+        let b1_len = hidden_size;
+        let w2_len = hidden_size * output_size;
+        // let b2_len = output_size; // b2 starts after w2
+
+        let w1_slice = &params[0..w1_len];
+        let b1_slice = &params[w1_len..w1_len + b1_len];
+        let w2_slice = &params[w1_len + b1_len..w1_len + b1_len + w2_len];
+        let b2_slice = &params[w1_len + b1_len + w2_len..];
+
+        // Map slices to views
+        let w1 = ArrayView2::from_shape((input_size, hidden_size), w1_slice).unwrap();
+        let b1 = ArrayView1::from_shape(b1_len, b1_slice).unwrap();
+        let w2 = ArrayView2::from_shape((hidden_size, output_size), w2_slice).unwrap();
+        let b2 = ArrayView1::from_shape(output_size, b2_slice).unwrap();
+
+        // Get current subset indices
         let indices_lock = self.subset_indices.read().unwrap();
         let indices = &*indices_lock;
 
-        // Evaluate loss on the random subset
+        // Use thread-local evaluator for zero-allocation performance
         let mut total_loss = 0.0;
-        for &idx in indices {
-            let x = self.x_train.row(idx).to_owned();
-            let y = self.y_train.row(idx).to_owned();
-
-            // Forward pass to get prediction
-            match nn.feed_forward(x) {
-                Ok((_z1, _a1, _z2, a2)) => {
-                    total_loss += nn.loss_function(&y, &a2);
-                }
-                Err(_) => {
-                    // If forward pass fails, return high penalty
-                    return f64::INFINITY;
-                }
+        EVALUATOR.with(|cell| {
+            let mut opt = cell.borrow_mut();
+            // Initialize or resize evaluator if needed
+            if opt.is_none() || opt.as_ref().unwrap().a1_buffer.len() != hidden_size {
+                *opt = Some(FastEvaluator::new(hidden_size, output_size));
             }
-        }
+            let evaluator = opt.as_mut().unwrap();
+
+            for &idx in indices {
+                let x = self.x_train.row(idx);
+                let y = self.y_train.row(idx);
+                total_loss += evaluator.evaluate(x, y, &w1, &b1, &w2, &b2);
+            }
+        });
 
         // Return average loss
         total_loss / indices.len() as f64
@@ -163,6 +239,7 @@ impl SingleValuedFunction for GeneticFitness {
 mod tests {
     use super::*;
     use ndarray::arr2;
+    use crate::NeuralNetwork;
 
     #[test]
     fn given_fitness_function_when_single_run_then_returns_valid_loss() {

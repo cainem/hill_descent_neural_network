@@ -45,7 +45,7 @@ impl NeuralNetwork {
 
         // Evaluate each example in the dataset
         for i in 0..x.nrows() {
-            let x_example = x.row(i).to_owned();
+            let x_example = x.row(i);
 
             // Get the network's prediction for this example
             // We only need a2 (the output), so ignore the intermediate values (_, _, _)

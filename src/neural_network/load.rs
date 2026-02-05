@@ -177,14 +177,14 @@ mod tests {
         let input = ndarray::Array1::from_vec(vec![0.5; 784]);
 
         // Get output from original
-        let (_, _, _, original_output) = nn.feed_forward(input.clone()).unwrap();
+        let (_, _, _, original_output) = nn.feed_forward(input.view()).unwrap();
 
         // Save and load
         nn.save(&path).unwrap();
         let loaded = NeuralNetwork::load(&path).unwrap();
 
         // Get output from loaded
-        let (_, _, _, loaded_output) = loaded.feed_forward(input).unwrap();
+        let (_, _, _, loaded_output) = loaded.feed_forward(input.view()).unwrap();
 
         // Outputs should match
         for i in 0..original_output.len() {

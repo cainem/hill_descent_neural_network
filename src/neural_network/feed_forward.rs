@@ -1,6 +1,6 @@
 use super::NeuralNetwork;
 use crate::sigmoid::sigmoid;
-use ndarray::Array1;
+use ndarray::{Array1, ArrayView1};
 
 /// Return type for feed_forward containing all intermediate layer values
 pub type FeedForwardResult = Result<(Array1<f64>, Array1<f64>, Array1<f64>, Array1<f64>), String>;
@@ -34,11 +34,11 @@ impl NeuralNetwork {
     ///
     /// let nn = NeuralNetwork::new(784, 64, 10);
     /// let input_vector = Array1::zeros(784);
-    /// let (z1, a1, z2, a2) = nn.feed_forward(input_vector)?;
+    /// let (z1, a1, z2, a2) = nn.feed_forward(input_vector.view())?;
     /// // a2 contains the network's predictions
     /// # Ok::<(), String>(())
     /// ```
-    pub fn feed_forward(&self, x: Array1<f64>) -> FeedForwardResult {
+    pub fn feed_forward(&self, x: ArrayView1<f64>) -> FeedForwardResult {
         // Validate input dimensions match what the network expects
         if x.len() != self.input_size {
             return Err(format!(
@@ -56,7 +56,7 @@ impl NeuralNetwork {
 
         // Apply sigmoid activation function to add non-linearity
         // Without activation, multiple layers would collapse to a single linear transformation
-        let a1 = sigmoid(&z1);
+        let a1 = sigmoid(z1.view());
 
         // === OUTPUT LAYER COMPUTATION ===
         // z2 = a1·W2 + b2
@@ -66,7 +66,7 @@ impl NeuralNetwork {
 
         // Apply sigmoid activation to get final predictions in range [0, 1]
         // For classification, each output represents the probability of that class
-        let a2 = sigmoid(&z2);
+        let a2 = sigmoid(z2.view());
 
         // Return all intermediate values - needed for backpropagation gradient calculations
         Ok((z1, a1, z2, a2))
@@ -83,7 +83,7 @@ mod tests {
         let nn = NeuralNetwork::new(5, 3, 2);
         let input = arr1(&[0.5, 0.3, 0.8, 0.1, 0.6]);
 
-        let result = nn.feed_forward(input);
+        let result = nn.feed_forward(input.view());
         assert!(result.is_ok());
     }
 
@@ -92,7 +92,7 @@ mod tests {
         let nn = NeuralNetwork::new(5, 3, 2);
         let input = arr1(&[0.5, 0.3, 0.8, 0.1, 0.6]);
 
-        let (_, _, _, a2) = nn.feed_forward(input).unwrap();
+        let (_, _, _, a2) = nn.feed_forward(input.view()).unwrap();
 
         // All outputs should be between 0 and 1 due to sigmoid
         for &val in a2.iter() {
@@ -105,7 +105,7 @@ mod tests {
         let nn = NeuralNetwork::new(5, 3, 2);
         let input = arr1(&[0.5, 0.3, 0.8]); // Wrong size: 3 instead of 5
 
-        let result = nn.feed_forward(input);
+        let result = nn.feed_forward(input.view());
         assert!(result.is_err());
     }
 
@@ -114,7 +114,7 @@ mod tests {
         let nn = NeuralNetwork::new(3, 2, 2);
         let input = arr1(&[0.0, 0.0, 0.0]);
 
-        let (_, _, _, a2) = nn.feed_forward(input).unwrap();
+        let (_, _, _, a2) = nn.feed_forward(input.view()).unwrap();
 
         // Even with zero input, biases should produce non-zero output
         assert_eq!(a2.len(), 2);
@@ -125,7 +125,7 @@ mod tests {
         let nn = NeuralNetwork::new(3, 2, 2);
         let input = arr1(&[100.0, 100.0, 100.0]);
 
-        let (_, _, _, a2) = nn.feed_forward(input).unwrap();
+        let (_, _, _, a2) = nn.feed_forward(input.view()).unwrap();
 
         // Sigmoid should keep outputs in [0, 1] even with large inputs
         for &val in a2.iter() {
@@ -138,7 +138,7 @@ mod tests {
         let nn = NeuralNetwork::new(3, 2, 2);
         let input = arr1(&[-100.0, -100.0, -100.0]);
 
-        let (_, _, _, a2) = nn.feed_forward(input).unwrap();
+        let (_, _, _, a2) = nn.feed_forward(input.view()).unwrap();
 
         // Sigmoid should keep outputs in [0, 1] even with large negative inputs
         for &val in a2.iter() {
@@ -151,7 +151,7 @@ mod tests {
         let nn = NeuralNetwork::new(5, 3, 2);
         let input = arr1(&[0.5, 0.3, 0.8, 0.1, 0.6]);
 
-        let (z1, a1, _, _) = nn.feed_forward(input).unwrap();
+        let (z1, a1, _, _) = nn.feed_forward(input.view()).unwrap();
 
         assert_eq!(z1.len(), 3);
         assert_eq!(a1.len(), 3);
@@ -162,7 +162,7 @@ mod tests {
         let nn = NeuralNetwork::new(5, 3, 2);
         let input = arr1(&[0.5, 0.3, 0.8, 0.1, 0.6]);
 
-        let (_, _, z2, a2) = nn.feed_forward(input).unwrap();
+        let (_, _, z2, a2) = nn.feed_forward(input.view()).unwrap();
 
         assert_eq!(z2.len(), 2);
         assert_eq!(a2.len(), 2);
@@ -173,8 +173,8 @@ mod tests {
         let nn = NeuralNetwork::new(3, 2, 2);
         let input = arr1(&[0.5, 0.3, 0.8]);
 
-        let (_, _, _, a2_first) = nn.feed_forward(input.clone()).unwrap();
-        let (_, _, _, a2_second) = nn.feed_forward(input).unwrap();
+        let (_, _, _, a2_first) = nn.feed_forward(input.view()).unwrap();
+        let (_, _, _, a2_second) = nn.feed_forward(input.view()).unwrap();
 
         // Should be deterministic
         for i in 0..a2_first.len() {
@@ -188,8 +188,8 @@ mod tests {
         let input1 = arr1(&[0.1, 0.2, 0.3]);
         let input2 = arr1(&[0.7, 0.8, 0.9]);
 
-        let (_, _, _, a2_first) = nn.feed_forward(input1).unwrap();
-        let (_, _, _, a2_second) = nn.feed_forward(input2).unwrap();
+        let (_, _, _, a2_first) = nn.feed_forward(input1.view()).unwrap();
+        let (_, _, _, a2_second) = nn.feed_forward(input2.view()).unwrap();
 
         // Different inputs should generally produce different outputs
         let mut has_difference = false;

@@ -167,11 +167,11 @@ impl NeuralNetwork {
         let mut total_loss = 0.0;
 
         for i in 0..x_train.nrows() {
-            let x = x_train.row(i).to_owned();
-            let y = y_train.row(i).to_owned();
+            let x = x_train.row(i);
+            let y = y_train.row(i);
 
             if let Ok((_z1, _a1, _z2, a2)) = self.feed_forward(x) {
-                total_loss += self.loss_function(&y, &a2);
+                total_loss += self.loss_function(y, a2.view());
             }
         }
 

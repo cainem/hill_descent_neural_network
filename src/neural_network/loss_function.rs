@@ -1,5 +1,5 @@
 use super::NeuralNetwork;
-use ndarray::Array1;
+use ndarray::ArrayView1;
 
 impl NeuralNetwork {
     /// Calculates the binary cross-entropy loss between true and predicted values.
@@ -22,7 +22,7 @@ impl NeuralNetwork {
     /// - Uses epsilon clipping (1e-15) to prevent log(0) which would be undefined
     /// - Clamps predictions to range [epsilon, 1-epsilon] for numerical stability
     /// - Returns the negative mean because we want to minimize loss
-    pub fn loss_function(&self, y_true: &Array1<f64>, y_pred: &Array1<f64>) -> f64 {
+    pub fn loss_function(&self, y_true: ArrayView1<f64>, y_pred: ArrayView1<f64>) -> f64 {
         // Small epsilon value to prevent taking log of 0 or 1
         // log(0) = -∞ and log(1-1) = -∞, which would cause numerical issues
         let epsilon = 1e-15;
@@ -34,8 +34,8 @@ impl NeuralNetwork {
         // Calculate cross-entropy for each output neuron:
         // For true label = 1: -log(ŷ) penalizes predictions far from 1
         // For true label = 0: -log(1-ŷ) penalizes predictions far from 0
-        let loss = y_true * y_pred_clipped.mapv(|p| p.ln())
-            + (1.0 - y_true) * (1.0 - y_pred_clipped).mapv(|p| p.ln());
+        let loss = &y_true * y_pred_clipped.mapv(|p| p.ln())
+            + &(1.0 - &y_true) * (1.0 - y_pred_clipped).mapv(|p| p.ln());
 
         // Return the negative mean loss across all output neurons
         -loss.mean().unwrap()
@@ -53,7 +53,7 @@ mod tests {
         let y_true = arr1(&[1.0, 0.0]);
         let y_pred = arr1(&[0.9999, 0.0001]);
 
-        let loss = nn.loss_function(&y_true, &y_pred);
+        let loss = nn.loss_function(y_true.view(), y_pred.view());
         assert!(
             loss < 0.01,
             "Loss should be very small for accurate predictions"
@@ -66,7 +66,7 @@ mod tests {
         let y_true = arr1(&[1.0, 0.0]);
         let y_pred = arr1(&[0.1, 0.9]);
 
-        let loss = nn.loss_function(&y_true, &y_pred);
+        let loss = nn.loss_function(y_true.view(), y_pred.view());
         assert!(loss > 1.0, "Loss should be high for wrong predictions");
     }
 
@@ -76,7 +76,7 @@ mod tests {
         let y_true = arr1(&[1.0, 0.0]);
         let y_pred = arr1(&[0.5, 0.5]);
 
-        let loss = nn.loss_function(&y_true, &y_pred);
+        let loss = nn.loss_function(y_true.view(), y_pred.view());
         assert!(
             loss > 0.5 && loss < 1.5,
             "Loss should be moderate for uncertain predictions"
@@ -89,7 +89,7 @@ mod tests {
         let y_true = arr1(&[0.0, 0.0, 1.0]);
         let y_pred = arr1(&[0.1, 0.1, 0.8]);
 
-        let loss = nn.loss_function(&y_true, &y_pred);
+        let loss = nn.loss_function(y_true.view(), y_pred.view());
         assert!(loss.is_finite(), "Loss should be finite");
         assert!(loss >= 0.0, "Loss should be non-negative");
     }
@@ -101,7 +101,7 @@ mod tests {
         // Extreme values that would cause log(0) without clipping
         let y_pred = arr1(&[1.0, 0.0]);
 
-        let loss = nn.loss_function(&y_true, &y_pred);
+        let loss = nn.loss_function(y_true.view(), y_pred.view());
         assert!(loss.is_finite(), "Loss should handle extreme values");
         assert!(loss < 0.1, "Perfect prediction should have very low loss");
     }
@@ -112,7 +112,7 @@ mod tests {
         let y_true = arr1(&[1.0, 0.0, 1.0, 0.0, 1.0]);
         let y_pred = arr1(&[0.9, 0.1, 0.9, 0.1, 0.9]);
 
-        let loss = nn.loss_function(&y_true, &y_pred);
+        let loss = nn.loss_function(y_true.view(), y_pred.view());
         assert!(loss.is_finite(), "Loss should be finite");
         assert!(
             loss < 0.2,
@@ -128,8 +128,8 @@ mod tests {
         let y_pred_good = arr1(&[0.9, 0.1]);
         let y_pred_bad = arr1(&[0.6, 0.4]);
 
-        let loss_good = nn.loss_function(&y_true, &y_pred_good);
-        let loss_bad = nn.loss_function(&y_true, &y_pred_bad);
+        let loss_good = nn.loss_function(y_true.view(), y_pred_good.view());
+        let loss_bad = nn.loss_function(y_true.view(), y_pred_bad.view());
 
         assert!(
             loss_good < loss_bad,
