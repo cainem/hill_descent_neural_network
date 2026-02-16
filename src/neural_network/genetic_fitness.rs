@@ -1,7 +1,6 @@
 use hill_descent_lib::SingleValuedFunction;
 use ndarray::{Array2, ArrayView1, ArrayView2};
-use rand::seq::SliceRandom;
-use rand::SeedableRng;
+use rand::seq::index;
 use std::cell::RefCell;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
@@ -163,12 +162,13 @@ impl GeneticFitness {
     }
 
     /// Generates a random subset of indices without replacement.
+    ///
+    /// Uses `rand::seq::index::sample` which efficiently samples `count` indices
+    /// from `0..total` without allocating a full `0..total` vector. This avoids
+    /// a 60,000-element Vec allocation when sampling from the MNIST training set.
     fn generate_random_indices(total: usize, count: usize) -> Vec<usize> {
-        let mut rng = rand::rngs::StdRng::from_os_rng();
-        let mut indices: Vec<usize> = (0..total).collect();
-        indices.shuffle(&mut rng);
-        indices.truncate(count);
-        indices
+        let mut rng = rand::rng();
+        index::sample(&mut rng, total, count).into_vec()
     }
 
     /// Checks if it's time to regenerate the random subset and does so if needed.

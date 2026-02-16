@@ -53,16 +53,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     nn_backprop.train(&x_train, &y_train, epochs, 0.01);
     let backprop_time = backprop_start.elapsed().as_secs_f64();
 
-    let final_accuracy_backprop = nn_backprop.accuracy(&x_test, &y_test);
-    let final_loss_backprop = nn_backprop.evaluate_loss(&x_test, &y_test);
+    let final_acc_train_bp = nn_backprop.accuracy(&x_train, &y_train);
+    let final_acc_test_bp = nn_backprop.accuracy(&x_test, &y_test);
+    let final_loss_test_bp = nn_backprop.evaluate_loss(&x_test, &y_test);
 
     println!("\n--- Backpropagation Results ---");
     println!("Training time: {:.2}s", backprop_time);
-    println!("Final test accuracy: {:.2}%", final_accuracy_backprop);
-    println!("Final test loss: {:.6}", final_loss_backprop);
+    println!("Final training accuracy: {:.2}%", final_acc_train_bp);
+    println!("Final test accuracy: {:.2}%", final_acc_test_bp);
+    println!("Final test loss: {:.6}", final_loss_test_bp);
     println!(
-        "Improvement: +{:.2}%\n",
-        final_accuracy_backprop - initial_accuracy_backprop
+        "Improvement (Test): +{:.2}%\n",
+        final_acc_test_bp - initial_accuracy_backprop
     );
 
     // === METHOD 2: Genetic Algorithm ===
@@ -75,16 +77,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Initial test accuracy: {:.2}%", initial_accuracy_genetic);
 
     // Genetic algorithm parameters
-    let generations = 100000;
+    let generations = 1_000_000;
     let population_size = 500;
-    let subset_size = 100; // Evaluate on 100 random training examples per fitness
+    let subset_size = 250; // Evaluate on 100 random training examples per fitness
 
     println!("\nStarting genetic training...");
     println!("Generations: {}", generations);
     println!("Population: {}", population_size);
     println!("Subset size: {} examples\n", subset_size);
 
-    let (final_loss_genetic, genetic_time) = nn_genetic.train_genetic(
+    let (final_train_loss_genetic, genetic_time) = nn_genetic.train_genetic(
         &x_train,
         &y_train,
         generations,
@@ -92,15 +94,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         subset_size,
     );
 
-    let final_accuracy_genetic = nn_genetic.accuracy(&x_test, &y_test);
+    let final_acc_train_gen = nn_genetic.accuracy(&x_train, &y_train);
+    let final_acc_test_gen = nn_genetic.accuracy(&x_test, &y_test);
+    let final_loss_test_gen = nn_genetic.evaluate_loss(&x_test, &y_test);
 
     println!("\n--- Genetic Algorithm Results ---");
     println!("Training time: {:.2}s", genetic_time);
-    println!("Final test accuracy: {:.2}%", final_accuracy_genetic);
-    println!("Final training loss: {:.6}", final_loss_genetic);
+    println!("Final training accuracy: {:.2}%", final_acc_train_gen);
+    println!("Final test accuracy: {:.2}%", final_acc_test_gen);
+    println!("Final training loss (subset): {:.6}", final_train_loss_genetic);
+    println!("Final test loss (full set): {:.6}", final_loss_test_gen);
     println!(
-        "Improvement: +{:.2}%\n",
-        final_accuracy_genetic - initial_accuracy_genetic
+        "Improvement (Test): +{:.2}%\n",
+        final_acc_test_gen - initial_accuracy_genetic
     );
 
     // === COMPARISON SUMMARY ===
@@ -108,28 +114,36 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("║           Comparison Summary               ║");
     println!("╚════════════════════════════════════════════╝\n");
 
-    println!("┌─────────────────────┬──────────────┬──────────────┐");
-    println!("│ Metric              │ Backprop     │ Genetic      │");
-    println!("├─────────────────────┼──────────────┼──────────────┤");
+    println!("┌──────────────────────┬──────────────┬──────────────┐");
+    println!("│ Metric               │ Backprop     │ Genetic      │");
+    println!("├──────────────────────┼──────────────┼──────────────┤");
     println!(
-        "│ Training Time       │ {:>8.2}s    │ {:>8.2}s    │",
+        "│ Training Time        │ {:>8.2}s    │ {:>8.2}s    │",
         backprop_time, genetic_time
     );
     println!(
-        "│ Final Accuracy      │ {:>8.2}%    │ {:>8.2}%    │",
-        final_accuracy_backprop, final_accuracy_genetic
+        "│ Training Accuracy    │ {:>8.2}%    │ {:>8.2}%    │",
+        final_acc_train_bp, final_acc_train_gen
     );
     println!(
-        "│ Accuracy Gain       │ {:>+8.2}%    │ {:>+8.2}%    │",
-        final_accuracy_backprop - initial_accuracy_backprop,
-        final_accuracy_genetic - initial_accuracy_genetic
+        "│ Test Accuracy        │ {:>8.2}%    │ {:>8.2}%    │",
+        final_acc_test_bp, final_acc_test_gen
     );
     println!(
-        "│ Time Ratio          │ {:>8.1}x    │ {:>8.1}x    │",
+        "│ Test Loss            │ {:>10.6}   │ {:>10.6}   │",
+        final_loss_test_bp, final_loss_test_gen
+    );
+    println!(
+        "│ Test Acc Gain        │ {:>+8.2}%    │ {:>+8.2}%    │",
+        final_acc_test_bp - initial_accuracy_backprop,
+        final_acc_test_gen - initial_accuracy_genetic
+    );
+    println!(
+        "│ Time Ratio           │ {:>8.1}x    │ {:>8.1}x    │",
         1.0,
         genetic_time / backprop_time
     );
-    println!("└─────────────────────┴──────────────┴──────────────┘\n");
+    println!("└──────────────────────┴──────────────┴──────────────┘\n");
 
     println!("Key Findings:");
     println!("• Backpropagation:");
@@ -148,16 +162,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  - Explores parameter space more broadly\n");
 
     println!("Trade-off Analysis:");
-    if final_accuracy_genetic > final_accuracy_backprop {
+    if final_acc_test_gen > final_acc_test_bp {
         println!(
-            "✓ Genetic algorithm achieved HIGHER accuracy (+{:.2}%)",
-            final_accuracy_genetic - final_accuracy_backprop
+            "✓ Genetic algorithm achieved HIGHER test accuracy (+{:.2}%)",
+            final_acc_test_gen - final_acc_test_bp
         );
         println!("  This suggests the broader exploration found a better solution.");
     } else {
         println!(
-            "✗ Backpropagation achieved HIGHER accuracy (+{:.2}%)",
-            final_accuracy_backprop - final_accuracy_genetic
+            "✗ Backpropagation achieved HIGHER test accuracy (+{:.2}%)",
+            final_acc_test_bp - final_acc_test_gen
         );
         println!("  Gradient-based optimization was more effective for this problem.");
     }
