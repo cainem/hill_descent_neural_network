@@ -322,21 +322,21 @@ Record results here after each change. Use the median time from criterion.
 
 | State | Median time | vs Baseline | Allocations (if measured) |
 |-------|-------------|-------------|---------------------------|
-| Baseline (before any changes) | | — | |
-| After Change 1 (Gamete buffers) | | | |
-| After Change 2 (compute_expressed) | | | |
+| Baseline (before any changes) | 647.67 µs | — | |
+| After Change 1 (Gamete buffers) | 618.13 µs | -4.6% (noise) | |
+| After Change 2 (compute_expressed) | 639.36 µs | -1.3% (noise) | |
 | After Change 3 (scalar return) | | | |
-| After Change 4 (in-place mutate) | | | |
+| After Change 4 (spare_capacity_mut) | 630.25 µs | -2.7% (noise, p=0.92) | Reverted — regression on NN benchmark |
 
 ### Neural network benchmark: `genetic_training_784_16_10_40gen`
 
 | State | Median time | vs Baseline | Notes |
 |-------|-------------|-------------|-------|
-| Baseline (before any changes) | | — | |
-| After Change 1 (Gamete buffers) | | | |
-| After Change 2 (compute_expressed) | | | |
-| After Change 3 (scalar return) | | | |
-| After Change 4 (in-place mutate) | | | |
+| Baseline (before any changes) | 6.99 s | — | |
+| After Change 1 (Gamete buffers) | 5.97 s | -14.5% | Bounded pool: MIN_POOL_CAPACITY=1000, MAX_POOL_ENTRIES=50 |
+| After Change 2 (compute_expressed) | 5.76 s | -17.6% | Same pool constants; expressed Vec<f64> recycling |
+| After Change 3 (scalar return) | | | Skipped — estimated ~4 KB/gen savings (negligible) |
+| After Change 4 (spare_capacity_mut) | 5.98 s | +3.75% (REGRESSED, p=0.01) | Reverted — MaybeUninit::write slower than push |
 
 ### CPU utilisation (Task Manager during `mnist_comparison`)
 
