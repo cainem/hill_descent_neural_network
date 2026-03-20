@@ -77,9 +77,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Initial test accuracy: {:.2}%", initial_accuracy_genetic);
 
     // Genetic algorithm parameters
-    let generations = 1_000_000;
-    let population_size = 500;
-    let subset_size = 250; // Evaluate on 100 random training examples per fitness
+    let generations = 100_000;
+    let population_size = 1_000;
+    let subset_size = 20; 
 
     println!("\nStarting genetic training...");
     println!("Generations: {}", generations);
